@@ -4,12 +4,12 @@
   let client = null;
 
   function hasSupabase() {
-    return !!(cfg.enabled && cfg.url && cfg.anonKey && cfg.url.includes('http') && window.supabase);
+    return !!(cfg.enabled && cfg.https://rpsiddurmwtwvpnwzclo.supabase.co && cfg.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwc2lkZHVybXd0d3Zwbnd6Y2xvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODc5NjMsImV4cCI6MjA5MTI2Mzk2M30.ROGegxjw-HOCkml-5vU19Fd5Bjwn64XpbGIagu8_DMc && cfg.url.includes('http') && window.supabase);
   }
 
   function getClient() {
     if (!hasSupabase()) return null;
-    if (!client) client = window.supabase.createClient(cfg.url, cfg.anonKey);
+    if (!client) client = window.supabase.createClient(cfg.https://rpsiddurmwtwvpnwzclo.supabase.co, cfg.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwc2lkZHVybXd0d3Zwbnd6Y2xvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODc5NjMsImV4cCI6MjA5MTI2Mzk2M30.ROGegxjw-HOCkml-5vU19Fd5Bjwn64XpbGIagu8_DMc);
     return client;
   }
 
