@@ -1,127 +1,16 @@
 /*
-  VEYRATH product data
-  Edit this file manually, or use admin.html to export a fresh version.
-  Keep Blinkstore product links in the blinkUrl field after products are created.
+  Fallback products for GitHub Pages.
+  Keep this empty until you add real products from admin panel.
+  Admin > Products > Export products.js will generate a replacement file.
 */
-window.VEYRATH_PRODUCTS = [
-  {
-    id: "bad-001",
-    name: "Born After Dark",
-    category: "T-Shirts",
-    type: "Oversized Tee",
-    gender: "Unisex",
-    vibe: "Dark Luxury",
-    price: 999,
-    compareAt: 1299,
-    rating: 4.9,
-    reviews: 18,
-    color: "Black",
-    badge: "Drop 001",
-    status: "Available Soon",
-    description: "A minimal oversized tee built around silence, night-drive energy, and Veyrath's first identity statement.",
-    frontText: "VEYЯATH",
-    backText: "BORN AFTER DARK",
-    details: ["240 GSM feel", "Oversized streetwear fit", "Small front logo", "Bold back print"],
-    blinkUrl: "#update-blinkstore-link"
-  },
-  {
-    id: "sat-002",
-    name: "Saturn Vein",
-    category: "T-Shirts",
-    type: "Oversized Tee",
-    gender: "Unisex",
-    vibe: "Astrology",
-    price: 1099,
-    compareAt: 1399,
-    rating: 4.8,
-    reviews: 12,
-    color: "Black",
-    badge: "Astro Line",
-    status: "Available Soon",
-    description: "A celestial print inspired by pressure, rebirth, and the orbit of self-made discipline.",
-    frontText: "V / SATURN",
-    backText: "SILENCE. PRESSURE. REBIRTH.",
-    details: ["Astrology-inspired print", "Premium dark palette", "Minimal front mark", "Back statement graphic"],
-    blinkUrl: "#update-blinkstore-link"
-  },
-  {
-    id: "rit-003",
-    name: "3AM Ritual",
-    category: "T-Shirts",
-    type: "Oversized Tee",
-    gender: "Unisex",
-    vibe: "Minimal Premium",
-    price: 999,
-    compareAt: 1299,
-    rating: 4.9,
-    reviews: 21,
-    color: "Off White",
-    badge: "Night Drive",
-    status: "Available Soon",
-    description: "A clean off-white oversized tee for the people who build when the world sleeps.",
-    frontText: "VEYRATH",
-    backText: "3AM IS WHERE THE REAL ONES ARE MADE.",
-    details: ["Soft off-white base", "Minimal front identity", "Statement back typography", "Unisex fit"],
-    blinkUrl: "#update-blinkstore-link"
-  },
-  {
-    id: "hood-004",
-    name: "Orbit Hoodie",
-    category: "Hoodies",
-    type: "Pullover Hoodie",
-    gender: "Unisex",
-    vibe: "Astrology",
-    price: 1799,
-    compareAt: 2299,
-    rating: 4.7,
-    reviews: 7,
-    color: "Black",
-    badge: "Coming Soon",
-    status: "Coming Soon",
-    description: "Future Veyrath hoodie concept with minimal orbit detailing and heavyweight streetwear presence.",
-    frontText: "V",
-    backText: "ORBIT OF THE UNKNOWN",
-    details: ["Future launch", "Heavyweight feel", "Astro line graphic", "Premium fit"],
-    blinkUrl: "#update-blinkstore-link"
-  },
-  {
-    id: "low-005",
-    name: "Nocturne Lower",
-    category: "Lowers",
-    type: "Jogger / Lower",
-    gender: "Unisex",
-    vibe: "Dark Luxury",
-    price: 1499,
-    compareAt: 1899,
-    rating: 4.6,
-    reviews: 5,
-    color: "Charcoal",
-    badge: "Coming Soon",
-    status: "Coming Soon",
-    description: "A future lower/jogger concept for full Veyrath streetwear sets.",
-    frontText: "VTH",
-    backText: "BORN AFTER DARK",
-    details: ["Future launch", "Relaxed fit", "Minimal branding", "Streetwear set ready"],
-    blinkUrl: "#update-blinkstore-link"
-  },
-  {
-    id: "acc-006",
-    name: "After Dark Cap",
-    category: "Accessories",
-    type: "Cap",
-    gender: "Unisex",
-    vibe: "Minimal Premium",
-    price: 699,
-    compareAt: 999,
-    rating: 4.5,
-    reviews: 4,
-    color: "Black",
-    badge: "Coming Soon",
-    status: "Coming Soon",
-    description: "A clean cap concept with a tiny Veyrath mark for future brand expansion.",
-    frontText: "V",
-    backText: "AFTER DARK",
-    details: ["Future launch", "Minimal logo", "Daily wear", "Dark palette"],
-    blinkUrl: "#update-blinkstore-link"
-  }
+window.VEYRATH_PRODUCTS = [];
+
+window.VEYRATH_CATEGORIES = [
+  { key: "tshirts", label: "T-Shirts", description: "Oversized, regular and premium cotton tees." },
+  { key: "hoodies", label: "Hoodies", description: "Heavyweight fleece and winter streetwear." },
+  { key: "lowers", label: "Lowers", description: "Joggers, cargos and relaxed fits." },
+  { key: "accessories", label: "Accessories", description: "Caps, totes, stickers and future drops." }
 ];
+
+window.VEYRATH_STYLES = ["premium", "streetwear", "astrology", "minimal", "dark-luxury"];
+window.VEYRATH_GENDERS = ["unisex", "men", "women"];

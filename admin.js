@@ -1,88 +1,184 @@
 (function(){
-  const $ = (q, root=document)=>root.querySelector(q);
-  const $$ = (q, root=document)=>[...root.querySelectorAll(q)];
-  const { STORE, get, set, products, money } = window.VeyrathStore || {};
-  const ADMIN_PASSWORD = 'veyrath-admin'; // Change this before sharing. Static password is not secure.
-  let activeProductId = null;
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+  let products = [];
+  let editingId = null;
 
-  function csv(rows){
-    if(!rows.length) return '';
-    const keys = Object.keys(rows[0]);
-    return [keys.join(','), ...rows.map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+  function toast(msg){
+    const el = $('#toast');
+    if(!el) return alert(msg);
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(window.__adminToast); window.__adminToast = setTimeout(()=>el.classList.remove('show'), 3000);
   }
-  function download(name, text, type='text/plain'){
-    const blob = new Blob([text],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
-    a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url);
+  function money(n){ return `${window.VEYRATH_SETTINGS?.currency || '₹'}${Number(n||0).toLocaleString('en-IN')}`; }
+  function esc(str=''){return String(str).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+
+  async function checkLogin(){
+    const user = await window.VeyrathDB.getUser();
+    if(user && (sessionStorage.getItem('veyrath_admin') || window.VeyrathDB.hasSupabase())) showAdmin(user);
   }
-  function productTemplate(){
-    return { id:'prod-'+Date.now(), name:'New Product', category:'T-Shirts', type:'Oversized Tee', gender:'Unisex', vibe:'Dark Luxury', price:999, compareAt:1299, rating:4.8, reviews:0, color:'Black', badge:'Drop 001', status:'Available Soon', description:'Write product description here.', frontText:'VEYRATH', backText:'BORN AFTER DARK', details:['Detail 1','Detail 2','Detail 3'], blinkUrl:'#update-blinkstore-link' };
+
+  async function showAdmin(user){
+    $('#loginPanel')?.classList.add('hidden');
+    $('#adminApp')?.classList.remove('hidden');
+    $('#adminEmailLabel') && ($('#adminEmailLabel').textContent = user.email || 'Admin');
+    $('#supabaseStatus') && ($('#supabaseStatus').textContent = window.VeyrathDB.hasSupabase() ? 'Supabase connected' : 'Local demo mode');
+    $('#supabaseStatus')?.classList.toggle('good', window.VeyrathDB.hasSupabase());
+    await refresh();
   }
-  function renderMetrics(){
-    const analytics = get(STORE.analytics, []), inquiries=get(STORE.inquiries, []), subs=get(STORE.subscribers, []), list=products();
-    $('#metrics').innerHTML = `
-      <div class="metric"><strong>${analytics.filter(x=>x.type==='page_view').length}</strong><span>Page views on this browser</span></div>
-      <div class="metric"><strong>${analytics.filter(x=>x.type==='buy_click').length}</strong><span>Buy clicks</span></div>
-      <div class="metric"><strong>${subs.length}</strong><span>Newsletter records</span></div>
-      <div class="metric"><strong>${inquiries.length}</strong><span>Inquiries</span></div>
-      <div class="metric"><strong>${list.length}</strong><span>Products</span></div>
-      <div class="metric"><strong>${new Set(analytics.map(x=>x.page)).size}</strong><span>Visited pages</span></div>`;
+
+  async function refresh(){
+    const data = await window.VeyrathDB.getAdminData();
+    products = data.products || [];
+    renderStats(data);
+    renderProducts();
+    renderLeads(data);
+    renderEvents(data.events || []);
   }
+
+  function renderStats(data){
+    const published = products.filter(p=>p.is_published).length;
+    const featured = products.filter(p=>p.is_featured).length;
+    $('#statProducts') && ($('#statProducts').textContent = products.length);
+    $('#statPublished') && ($('#statPublished').textContent = published);
+    $('#statFeatured') && ($('#statFeatured').textContent = featured);
+    $('#statLeads') && ($('#statLeads').textContent = (data.newsletter?.length||0) + (data.inquiries?.length||0));
+  }
+
   function renderProducts(){
-    const list = products();
-    $('#adminProductsTable').innerHTML = `<table><thead><tr><th>Name</th><th>Category</th><th>Vibe</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${list.map(p=>`<tr><td>${p.name}</td><td>${p.category}</td><td>${p.vibe}</td><td>${money(p.price)}</td><td>${p.status}</td><td><button class="btn small" data-edit="${p.id}">Edit</button> <button class="btn small" data-delete="${p.id}">Delete</button></td></tr>`).join('')}</tbody></table>`;
-    $$('[data-edit]').forEach(b=>b.onclick=()=>loadProduct(b.dataset.edit));
-    $$('[data-delete]').forEach(b=>b.onclick=()=>{ if(confirm('Delete this product locally?')){ set(STORE.products, list.filter(p=>p.id!==b.dataset.delete)); renderProducts(); renderMetrics(); } });
+    const body = $('#productsTableBody');
+    if(!body) return;
+    body.innerHTML = products.length ? products.map(p=>`<tr>
+      <td><strong>${esc(p.title)}</strong><br><span class="text-muted">${esc(p.slug)}</span></td>
+      <td>${esc(p.category)}</td>
+      <td>${esc(p.gender)}</td>
+      <td>${esc(p.style)}</td>
+      <td>${money(p.price)}</td>
+      <td>${p.is_published ? 'Published' : 'Draft'}${p.is_featured ? ' · Featured' : ''}</td>
+      <td>
+        <button class="mini-btn edit-product" data-id="${esc(p.id)}">Edit</button>
+        <button class="mini-btn delete-product" data-id="${esc(p.id)}">Delete</button>
+      </td>
+    </tr>`).join('') : `<tr><td colspan="7">No products yet. Add your first item from Product Editor.</td></tr>`;
+    $$('.edit-product').forEach(btn=>btn.addEventListener('click',()=>loadEditor(btn.dataset.id)));
+    $$('.delete-product').forEach(btn=>btn.addEventListener('click',async()=>{
+      if(!confirm('Delete this product?')) return;
+      try{ await window.VeyrathDB.deleteProduct(btn.dataset.id); toast('Product deleted.'); await refresh(); }
+      catch(err){ toast(err.message || 'Delete failed.'); }
+    }));
   }
-  function loadProduct(id){
-    const p = products().find(x=>x.id===id) || productTemplate(); activeProductId = p.id;
-    const form = $('#productForm');
-    for(const [k,v] of Object.entries(p)){
-      const input = form.elements[k]; if(!input) continue;
-      input.value = Array.isArray(v) ? v.join('\n') : v;
-    }
-    $('#productEditorTitle').textContent = 'Editing: ' + p.name;
-    window.scrollTo({top:form.getBoundingClientRect().top + scrollY - 100, behavior:'smooth'});
+
+  function renderLeads(data){
+    const news = $('#newsletterList');
+    const inquiries = $('#inquiryList');
+    if(news) news.innerHTML = (data.newsletter||[]).slice(0,20).map(x=>`<tr><td>${esc(x.email)}</td><td>${esc(x.name||'')}</td><td>${esc(x.created_at||'')}</td></tr>`).join('') || '<tr><td colspan="3">No newsletter leads yet.</td></tr>';
+    if(inquiries) inquiries.innerHTML = (data.inquiries||[]).slice(0,20).map(x=>`<tr><td>${esc(x.name||'')}</td><td>${esc(x.email||'')}</td><td>${esc(x.subject||x.source||'')}</td><td>${esc(x.created_at||'')}</td></tr>`).join('') || '<tr><td colspan="4">No inquiries yet.</td></tr>';
   }
-  function saveProduct(e){
-    e.preventDefault(); const fd = new FormData(e.target); const p = {};
-    for(const [k,v] of fd.entries()) p[k]=v;
-    p.price=Number(p.price||0); p.compareAt=Number(p.compareAt||0); p.rating=Number(p.rating||0); p.reviews=Number(p.reviews||0); p.details=String(p.details||'').split('\n').filter(Boolean);
-    const list = products(); const idx = list.findIndex(x=>x.id===p.id);
-    if(idx>=0) list[idx]=p; else list.push(p);
-    set(STORE.products, list); renderProducts(); renderMetrics(); alert('Saved locally. Export products.js and upload it to GitHub to update live product data.');
+
+  function renderEvents(events){
+    const body = $('#eventsTableBody');
+    if(!body) return;
+    body.innerHTML = events.slice(0,50).map(e=>`<tr><td>${esc(e.event_name)}</td><td>${esc(e.page_path)}</td><td>${esc(e.created_at)}</td><td>${esc(JSON.stringify(e.metadata||{}))}</td></tr>`).join('') || '<tr><td colspan="4">No events yet.</td></tr>';
   }
-  function renderInquiries(){
-    const list = get(STORE.inquiries, []);
-    $('#inquiriesTable').innerHTML = list.length ? `<table><thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Topic</th><th>Message</th></tr></thead><tbody>${list.map(i=>`<tr><td>${new Date(i.ts).toLocaleString()}</td><td>${i.name||''}</td><td>${i.email||''}</td><td>${i.topic||''}</td><td>${i.message||''}</td></tr>`).join('')}</tbody></table>` : '<div class="card"><p class="muted">No inquiries yet on this browser.</p></div>';
+
+  function readForm(){
+    return window.VeyrathDB.normalizeProduct({
+      id: editingId || $('#pId').value || undefined,
+      title: $('#pTitle').value.trim(),
+      slug: $('#pSlug').value.trim() || undefined,
+      category: $('#pCategory').value,
+      gender: $('#pGender').value,
+      style: $('#pStyle').value,
+      budget: $('#pBudget').value,
+      price: Number($('#pPrice').value || 0),
+      mrp: Number($('#pMrp').value || 0),
+      rating: Number($('#pRating').value || 0),
+      reviews_count: Number($('#pReviews').value || 0),
+      description: $('#pDescription').value.trim(),
+      image_url: $('#pImage').value.trim(),
+      blink_url: $('#pBlink').value.trim(),
+      is_featured: $('#pFeatured').checked,
+      is_published: $('#pPublished').checked
+    });
   }
-  function renderSubscribers(){
-    const list = get(STORE.subscribers, []);
-    $('#subscribersTable').innerHTML = list.length ? `<table><thead><tr><th>Date</th><th>Email</th><th>Source</th></tr></thead><tbody>${list.map(s=>`<tr><td>${new Date(s.ts).toLocaleString()}</td><td>${s.email}</td><td>${s.source||''}</td></tr>`).join('')}</tbody></table>` : '<div class="card"><p class="muted">No newsletter records yet on this browser.</p></div>';
+
+  function clearEditor(){
+    editingId = null;
+    $('#productForm')?.reset();
+    $('#pPublished').checked = true;
+    $('#pFeatured').checked = false;
+    $('#editorTitle') && ($('#editorTitle').textContent = 'Add Product');
   }
-  function renderAnalytics(){
-    const list = get(STORE.analytics, []).slice(-150).reverse();
-    $('#analyticsTable').innerHTML = list.length ? `<table><thead><tr><th>Date</th><th>Type</th><th>Page</th><th>Data</th></tr></thead><tbody>${list.map(a=>`<tr><td>${new Date(a.ts).toLocaleString()}</td><td>${a.type}</td><td>${a.page}</td><td>${JSON.stringify(a.payload||{})}</td></tr>`).join('')}</tbody></table>` : '<div class="card"><p class="muted">No analytics yet.</p></div>';
+
+  function loadEditor(id){
+    const p = products.find(x=>x.id===id);
+    if(!p) return;
+    editingId = p.id;
+    $('#editorTitle') && ($('#editorTitle').textContent = 'Edit Product');
+    $('#pId').value = p.id || '';
+    $('#pTitle').value = p.title || '';
+    $('#pSlug').value = p.slug || '';
+    $('#pCategory').value = p.category || 'tshirts';
+    $('#pGender').value = p.gender || 'unisex';
+    $('#pStyle').value = p.style || 'premium';
+    $('#pBudget').value = p.budget || 'mid';
+    $('#pPrice').value = p.price || '';
+    $('#pMrp').value = p.mrp || '';
+    $('#pRating').value = p.rating || 0;
+    $('#pReviews').value = p.reviews_count || 0;
+    $('#pDescription').value = p.description || '';
+    $('#pImage').value = p.image_url || '';
+    $('#pBlink').value = p.blink_url || '';
+    $('#pFeatured').checked = !!p.is_featured;
+    $('#pPublished').checked = p.is_published !== false;
+    document.getElementById('productEditorCard')?.scrollIntoView({behavior:'smooth'});
   }
-  function exportProducts(){
-    const data = 'window.VEYRATH_PRODUCTS = ' + JSON.stringify(products(), null, 2) + ';\n';
-    download('products.js', data, 'application/javascript');
+
+  function exportProductsJs(){
+    const text = `/* Generated from Veyrath Admin */\nwindow.VEYRATH_PRODUCTS = ${JSON.stringify(products, null, 2)};\n\nwindow.VEYRATH_CATEGORIES = ${JSON.stringify(window.VEYRATH_CATEGORIES || [], null, 2)};\nwindow.VEYRATH_STYLES = ${JSON.stringify(window.VEYRATH_STYLES || [], null, 2)};\nwindow.VEYRATH_GENDERS = ${JSON.stringify(window.VEYRATH_GENDERS || [], null, 2)};\n`;
+    const blob = new Blob([text], {type:'application/javascript'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'products.js'; a.click();
+    URL.revokeObjectURL(a.href);
   }
-  function showAdmin(){
-    $('#adminLogin').style.display='none'; $('#adminArea').style.display='grid';
-    renderMetrics(); renderProducts(); renderInquiries(); renderSubscribers(); renderAnalytics();
+
+  function exportCsv(key){
+    const data = JSON.parse(localStorage.getItem(key) || '[]');
+    if(!data.length) return toast('Nothing to export yet.');
+    const headers = Array.from(data.reduce((set,row)=>{Object.keys(row).forEach(k=>set.add(k));return set;},new Set()));
+    const rows = [headers.join(','), ...data.map(row=>headers.map(h=>`"${String(row[h] ?? '').replace(/"/g,'""')}"`).join(','))];
+    const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = key + '.csv'; a.click(); URL.revokeObjectURL(a.href);
   }
-  function init(){
-    if(!$('#adminLogin')) return;
-    if(sessionStorage.getItem('veyrath_admin')==='true') showAdmin();
-    $('#loginForm').onsubmit=e=>{ e.preventDefault(); const pass=$('#adminPass').value; if(pass===ADMIN_PASSWORD){ sessionStorage.setItem('veyrath_admin','true'); showAdmin(); } else alert('Wrong password. Default is mentioned in README/admin.js. Change it before sharing.'); };
-    $$('.admin-sidebar [data-panel]').forEach(btn=>btn.onclick=()=>{ $$('.admin-panel').forEach(p=>p.classList.remove('active')); $('#panel-'+btn.dataset.panel).classList.add('active'); });
-    $('#newProductBtn').onclick=()=>{ const p=productTemplate(); const list=products(); list.push(p); set(STORE.products,list); renderProducts(); loadProduct(p.id); renderMetrics(); };
-    $('#productForm').onsubmit=saveProduct;
-    $('#exportProductsBtn').onclick=exportProducts;
-    $('#resetProductsBtn').onclick=()=>{ if(confirm('Reset to original demo products?')){ localStorage.removeItem(STORE.products); renderProducts(); renderMetrics(); } };
-    $('#exportInquiriesBtn').onclick=()=>download('veyrath-inquiries.csv', csv(get(STORE.inquiries, [])), 'text/csv');
-    $('#exportSubscribersBtn').onclick=()=>download('veyrath-subscribers.csv', csv(get(STORE.subscribers, [])), 'text/csv');
-    $('#clearAnalyticsBtn').onclick=()=>{ if(confirm('Clear local analytics?')){ set(STORE.analytics, []); renderAnalytics(); renderMetrics(); } };
+
+  function bind(){
+    $('#adminLoginForm')?.addEventListener('submit', async e=>{
+      e.preventDefault();
+      const email = $('#adminEmail').value.trim();
+      const pass = $('#adminPassword').value.trim();
+      try{ const user = await window.VeyrathDB.signIn(email, pass); toast('Admin unlocked.'); await showAdmin(user); }
+      catch(err){ toast(err.message || 'Login failed.'); }
+    });
+    $('#logoutBtn')?.addEventListener('click', async()=>{ await window.VeyrathDB.signOut(); location.reload(); });
+    $$('.admin-tab').forEach(tab=>tab.addEventListener('click',()=>{
+      $$('.admin-tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
+      $$('.admin-panel').forEach(p=>p.classList.remove('active'));
+      $('#' + tab.dataset.panel)?.classList.add('active');
+    }));
+    $('#productForm')?.addEventListener('submit', async e=>{
+      e.preventDefault();
+      const product = readForm();
+      if(!product.title || !product.price) return toast('Product title and price are required.');
+      try{ await window.VeyrathDB.saveProduct(product); toast('Product saved.'); clearEditor(); await refresh(); }
+      catch(err){ toast(err.message || 'Save failed.'); }
+    });
+    $('#clearProductForm')?.addEventListener('click', clearEditor);
+    $('#exportProducts')?.addEventListener('click', exportProductsJs);
+    $('#refreshAdmin')?.addEventListener('click', refresh);
+    $('#exportNewsletter')?.addEventListener('click',()=>exportCsv('veyrath_newsletter'));
+    $('#exportInquiries')?.addEventListener('click',()=>exportCsv('veyrath_inquiries'));
+    $('#pTitle')?.addEventListener('input',()=>{ if(!editingId) $('#pSlug').value = window.VeyrathDB.slugify($('#pTitle').value); });
   }
-  document.addEventListener('DOMContentLoaded', init);
+
+  document.addEventListener('DOMContentLoaded', ()=>{ bind(); checkLogin(); });
 })();

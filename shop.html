@@ -1,23 +1,93 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shop — VEYЯATH</title><meta name="description" content="Shop Veyrath Drop 001: premium oversized T-shirts, hoodies, lowers, accessories and dark astrology streetwear."><link rel="stylesheet" href="styles.css"></head><body><div id="site-nav"></div>
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shop Veyrath | Catalogue</title>
+  <meta name="description" content="Browse Veyrath T-shirts, hoodies, lowers and accessories with filters for gender, budget, rating and design style.">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Veyrath">
+  <meta name="theme-color" content="#030305">
+  <link rel="canonical" href="shop.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Shop Veyrath | Catalogue">
+  <meta property="og:description" content="Browse Veyrath T-shirts, hoodies, lowers and accessories with filters for gender, budget, rating and design style.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="logo.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="locked"><div class="page-shell">
+<div id="introLoader" class="intro-loader" aria-hidden="true">
+  <div class="intro-orbit"></div>
+  <div class="intro-box"><div class="loader-logo">VEY<span class="r">R</span>ATH</div><div class="loader-sub">Born After Dark · Initializing</div><div class="loader-bar"><span></span></div></div>
+</div>
+<header class="site-header">
+  <nav class="navbar" aria-label="Main navigation">
+    <a class="brand" href="index.html" aria-label="Veyrath home">
+      <span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 7 L24 42 L40 7 L33 7 L24 27 L15 7Z" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M33 8 C42 15 42 28 33 36" fill="none" stroke="#e13a4b" stroke-width="2.5"/><circle cx="36" cy="9" r="2.7" fill="#c5a46a"/></svg></span>
+      <span class="brand-word">VEY<span class="r">R</span>ATH</span>
+    </a>
+    <div class="navlinks"><a href="index.html" class="">Home</a><a href="shop.html" class="active">Shop</a><a href="about.html" class="">About</a><a href="support.html" class="">Support</a><a href="contact.html" class="">Contact</a></div>
+    <div class="header-actions"><button class="pill-btn" data-open-auth>Login</button><a class="pill-btn primary" href="shop.html">Catalogue</a><button id="menuToggle" class="menu-toggle" aria-label="Open menu"><span></span></button></div>
+  </nav>
+</header>
+<div id="megaMenu" class="mega-menu">
+  <div class="mega-inner">
+    <div class="mega-links"><a href="index.html">Home</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="support.html">Support</a><a href="contact.html">Contact</a></div>
+    <div class="mega-card"><p class="eyebrow">Veyrath System</p><h3 class="section-title">Silent clothes. Loud presence.</h3><p class="text-muted">Premium streetwear with astrology-coded details, dark luxury visuals and a catalogue powered by your admin panel.</p><a class="ghost-btn" href="admin.html">Admin Panel</a></div>
+  </div>
+</div>
 <main>
-  <section class="page-hero"><div class="page-hero-inner reveal"><div class="eyebrow"><i></i> Catalogue • Filters • Drop 001</div><h1>Shop <span class="thin">VEYЯATH</span></h1><p class="lead">Browse T-shirts, hoodies, lowers, and accessories. Product buttons will connect to Blinkstore checkout once your Blinkstore products are live.</p></div></section>
-  <section class="section" style="padding-top:30px">
-    <div class="shop-layout">
-      <aside class="filters reveal">
-        <h3>Filters</h3>
-        <div class="filter-group"><label>Search</label><input id="searchBox" class="input" placeholder="Search product, vibe, type"></div>
-        <div class="filter-group"><label>Style vibe</label><select id="vibeFilter"><option>All</option><option>Dark Luxury</option><option>Astrology</option><option>Minimal Premium</option></select></div>
-        <div class="filter-group"><label>Gender</label><select id="genderFilter"><option>All</option><option>Unisex</option><option>Men</option><option>Women</option></select></div>
-        <div class="filter-group"><label>Budget</label><select id="budgetFilter"><option value="All">All</option><option value="under800">Under ₹800</option><option value="800to1200">₹800 – ₹1200</option><option value="1200plus">₹1200+</option></select></div>
-        <div class="filter-group"><label>Review rating</label><select id="ratingFilter"><option value="All">All</option><option value="4.5">4.5★ & above</option><option value="4.8">4.8★ & above</option></select></div>
-        <div class="filter-group"><label>Sort</label><select id="sortFilter"><option value="featured">Featured</option><option value="priceLow">Price low to high</option><option value="priceHigh">Price high to low</option><option value="rating">Top rated</option></select></div>
-        <p class="notice">Admin can edit products locally and export updated products.js from admin.html.</p>
-      </aside>
-      <div>
-        <div class="section-head" style="margin-bottom:18px"><div><div class="kicker">Categories</div><h2>Catalogue</h2></div><p id="resultCount" class="muted">0 products</p></div>
-        <div id="categoryTabs" class="category-tabs"></div>
-        <div id="productsGrid" class="products-grid"></div>
-      </div>
+  <section class="page-hero"><div class="container"><p class="kicker reveal">Catalogue System</p><h1 class="page-title reveal">Shop by category,<br><span class="grad-text">style and signal.</span></h1><p class="section-copy reveal">Products are dynamic. Add, edit, remove and publish items from admin. Filters are ready for T-shirts, hoodies, lowers, accessories, gender, budget, reviews and style.</p></div></section>
+  <section id="catalogue"><div class="full-container catalogue-layout">
+    <aside class="filters-panel reveal">
+      <div class="filter-group"><label for="searchInput">Search</label><input id="searchInput" class="input" placeholder="Search product, vibe, tag"></div>
+      <div class="filter-group"><label for="categoryFilter">Category</label><select id="categoryFilter" class="select"><option value="all">All</option><option value="tshirts">T-Shirts</option><option value="hoodies">Hoodies</option><option value="lowers">Lowers</option><option value="accessories">Accessories</option></select></div>
+      <div class="filter-group"><label for="genderFilter">Gender</label><select id="genderFilter" class="select"><option value="all">All</option><option value="unisex">Unisex</option><option value="men">Men</option><option value="women">Women</option></select></div>
+      <div class="filter-group"><label for="budgetFilter">Budget</label><select id="budgetFilter" class="select"><option value="all">All</option><option value="budget">Budget</option><option value="mid">Mid</option><option value="premium">Premium</option></select></div>
+      <div class="filter-group"><label>Style</label><div class="chips"><button class="filter-chip active" data-style="all">All</button><button class="filter-chip" data-style="premium">Premium</button><button class="filter-chip" data-style="streetwear">Streetwear</button><button class="filter-chip" data-style="astrology">Astrology</button><button class="filter-chip" data-style="minimal">Minimal</button></div></div>
+      <div class="filter-group"><label for="ratingFilter">Minimum Rating</label><select id="ratingFilter" class="select"><option value="0">Any</option><option value="3">3★+</option><option value="4">4★+</option><option value="4.5">4.5★+</option></select></div>
+      <div class="filter-group"><label for="sortFilter">Sort</label><select id="sortFilter" class="select"><option value="new">Newest</option><option value="price-low">Price Low</option><option value="price-high">Price High</option><option value="rating">Rating</option></select></div>
+      <button id="resetFilters" class="ghost-btn" type="button">Reset Filters</button>
+    </aside>
+    <div><div class="section-head"><div><p class="eyebrow">Veyrath Catalogue</p><h2 class="section-title">Products</h2></div><span id="productCount" class="pill-btn">0 products</span></div><div id="shopGrid" class="product-grid"></div></div>
+  </div></section>
+</main></div>
+<div id="authModal" class="modal" aria-hidden="true">
+  <div class="modal-card">
+    <button id="authClose" class="modal-close" aria-label="Close">×</button>
+    <p class="eyebrow">Member Access</p>
+    <h2 id="authTitle">Login for drops, discounts and updates</h2>
+    <p>This is a lightweight customer login/newsletter system. With Supabase enabled, it can store leads and later be upgraded to full accounts.</p>
+    <form id="authForm" class="form-grid">
+      <input id="authName" class="input" placeholder="Name" autocomplete="name">
+      <input id="authEmail" class="input" type="email" placeholder="Email address" autocomplete="email" required>
+      <button class="pill-btn primary full" type="submit">Unlock Updates</button>
+    </form>
+  </div>
+</div>
+<div id="cookieBanner" class="cookie-banner">
+  <p><strong>Cookies & analytics:</strong> Veyrath uses lightweight cookies/local storage to remember preferences, improve catalogue experience and measure clicks. No sensitive payment data is stored here.</p>
+  <div class="cookie-actions"><button id="cookieDecline" class="mini-btn">Decline</button><button id="cookieAccept" class="mini-btn">Accept</button></div>
+</div>
+<div id="toast" class="toast" role="status"></div>
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div><a class="brand" href="index.html"><span class="brand-symbol"><svg viewBox="0 0 48 48"><path d="M8 7 L24 42 L40 7 L33 7 L24 27 L15 7Z" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M33 8 C42 15 42 28 33 36" fill="none" stroke="#e13a4b" stroke-width="2.5"/><circle cx="36" cy="9" r="2.7" fill="#c5a46a"/></svg></span><span class="brand-word small">VEY<span class="r">R</span>ATH</span></a><p class="text-muted">Born After Dark. Dark luxury streetwear built for silent ambition, night-drive energy and astrology-coded design.</p></div>
+      <div><h4>Store</h4><a href="shop.html">Catalogue</a><a href="shop.html#tshirts">T-Shirts</a><a href="shop.html#hoodies">Hoodies</a><a href="shop.html#lowers">Lowers</a></div>
+      <div><h4>Company</h4><a href="about.html">About</a><a href="contact.html">Contact</a><a href="support.html">Support</a><a href="admin.html">Admin</a></div>
+      <div><h4>Legal</h4><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms & Conditions</a><a href="shipping.html">Shipping Policy</a><a href="returns.html">Return/Refund Policy</a><a href="cancellation.html">Cancellation Policy</a></div>
     </div>
-  </section>
-</main><div id="site-footer"></div><script src="products.js"></script><script src="script.js"></script></body></html>
+    <div class="footer-bottom"><span>© 2026 Veyrath. All rights reserved.</span><span>Prototype storefront for print-on-demand fulfilment. Replace placeholders before payment gateway approval.</span></div>
+  </div>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="products.js"></script>
+<script src="supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

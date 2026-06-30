@@ -1,1 +1,110 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin — VEYЯATH</title><meta name="robots" content="noindex"><link rel="stylesheet" href="styles.css"></head><body><div id="site-nav"></div><main><section class="page-hero"><div class="page-hero-inner reveal"><div class="eyebrow"><i></i> Static admin dashboard</div><h1>Admin <span class="thin">Panel</span></h1><p class="lead">This is a GitHub Pages compatible admin. It edits local product data and exports files. It is not a secure live backend.</p></div></section><section class="section" style="padding-top:30px"><div id="adminLogin" class="admin-login reveal"><h2>Login</h2><p class="notice">Default password: <strong>veyrath-admin</strong>. Change it inside admin.js before sharing the website. Static passwords are not secure.</p><form id="loginForm"><label>Password</label><input id="adminPass" class="input" type="password" required><button class="btn primary" type="submit" style="margin-top:14px">Enter Admin</button></form></div><div id="adminArea" class="admin-shell" style="display:none"><aside class="admin-sidebar"><button class="btn small" data-panel="dashboard">Dashboard</button><button class="btn small" data-panel="products">Products</button><button class="btn small" data-panel="inquiries">Inquiries</button><button class="btn small" data-panel="subscribers">Newsletter</button><button class="btn small" data-panel="analytics">Analytics</button><p class="muted">For real multi-device analytics and live product editing, connect Supabase later.</p></aside><div><section id="panel-dashboard" class="admin-panel active"><h2>Dashboard</h2><div id="metrics" class="grid three"></div></section><section id="panel-products" class="admin-panel"><div class="section-head"><div><h2>Products</h2><p class="muted">Add/edit products locally, then export products.js and replace the old file on GitHub.</p></div><div><button id="newProductBtn" class="btn small">New Product</button><button id="exportProductsBtn" class="btn small primary">Export products.js</button><button id="resetProductsBtn" class="btn small">Reset Demo</button></div></div><div id="adminProductsTable" class="table-wrap"></div><form id="productForm" class="card" style="margin-top:20px"><h3 id="productEditorTitle">Product Editor</h3><div class="form-grid"><div><label>ID</label><input class="input" name="id" required></div><div><label>Name</label><input class="input" name="name" required></div><div><label>Category</label><select class="input" name="category"><option>T-Shirts</option><option>Hoodies</option><option>Lowers</option><option>Accessories</option></select></div><div><label>Type</label><input class="input" name="type"></div><div><label>Gender</label><select class="input" name="gender"><option>Unisex</option><option>Men</option><option>Women</option></select></div><div><label>Vibe</label><select class="input" name="vibe"><option>Dark Luxury</option><option>Astrology</option><option>Minimal Premium</option></select></div><div><label>Price</label><input class="input" type="number" name="price"></div><div><label>Compare at</label><input class="input" type="number" name="compareAt"></div><div><label>Rating</label><input class="input" type="number" step="0.1" name="rating"></div><div><label>Reviews</label><input class="input" type="number" name="reviews"></div><div><label>Color</label><input class="input" name="color"></div><div><label>Badge</label><input class="input" name="badge"></div><div><label>Status</label><input class="input" name="status"></div><div><label>Blinkstore URL</label><input class="input" name="blinkUrl"></div><div><label>Front text</label><input class="input" name="frontText"></div><div><label>Back text</label><input class="input" name="backText"></div><div class="full"><label>Description</label><textarea name="description"></textarea></div><div class="full"><label>Details, one per line</label><textarea name="details"></textarea></div></div><button class="btn primary" type="submit" style="margin-top:14px">Save Product Locally</button></form></section><section id="panel-inquiries" class="admin-panel"><div class="section-head"><div><h2>Inquiries</h2><p class="muted">Local records only unless backend is connected.</p></div><button id="exportInquiriesBtn" class="btn small">Export CSV</button></div><div id="inquiriesTable" class="table-wrap"></div></section><section id="panel-subscribers" class="admin-panel"><div class="section-head"><div><h2>Newsletter</h2><p class="muted">Local browser records.</p></div><button id="exportSubscribersBtn" class="btn small">Export CSV</button></div><div id="subscribersTable" class="table-wrap"></div></section><section id="panel-analytics" class="admin-panel"><div class="section-head"><div><h2>Analytics</h2><p class="muted">Local demo analytics from this browser only.</p></div><button id="clearAnalyticsBtn" class="btn small">Clear Analytics</button></div><div id="analyticsTable" class="table-wrap"></div></section></div></div></section></main><div id="site-footer"></div><script src="products.js"></script><script src="script.js"></script><script src="admin.js"></script></body></html>
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Veyrath Admin Panel</title>
+  <meta name="description" content="Admin dashboard for Veyrath products, catalogue, analytics, newsletter and inquiries.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#030305">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="admin-body">
+<div class="page-shell">
+<header class="site-header">
+  <nav class="navbar" aria-label="Admin navigation">
+    <a class="brand" href="index.html"><span class="brand-symbol"><svg viewBox="0 0 48 48"><path d="M8 7 L24 42 L40 7 L33 7 L24 27 L15 7Z" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M33 8 C42 15 42 28 33 36" fill="none" stroke="#e13a4b" stroke-width="2.5"/><circle cx="36" cy="9" r="2.7" fill="#c5a46a"/></svg></span><span class="brand-word">VEY<span class="r">R</span>ATH</span></a>
+    <div class="navlinks"><a href="index.html">Site</a><a href="shop.html">Shop</a><a href="support.html">Support</a><a class="active" href="admin.html">Admin</a></div>
+    <div class="header-actions"><span id="supabaseStatus" class="pill-btn status-dot">Checking</span><button id="logoutBtn" class="pill-btn">Logout</button></div>
+  </nav>
+</header>
+<main class="container">
+  <section id="loginPanel" class="page-hero">
+    <div class="two-col">
+      <div><p class="kicker">Veyrath Admin</p><h1 class="page-title">Control<br><span class="grad-text">Room.</span></h1><p class="section-copy">Use Supabase login if configured. Until then, local demo mode lets you add products, export products.js and test the full catalogue system.</p></div>
+      <form id="adminLoginForm" class="glass-card">
+        <p class="eyebrow">Admin Login</p>
+        <label class="filter-group"><span>Email</span><input id="adminEmail" class="input" type="email" placeholder="admin@veyrath.in"></label>
+        <label class="filter-group"><span>Password / Local PIN</span><input id="adminPassword" class="input" type="password" placeholder="veyrath-admin" required></label>
+        <button class="pill-btn primary" type="submit">Enter Admin</button>
+        <p class="text-muted">Local fallback PIN is inside <code>supabase-config.js</code>. Real security needs Supabase Auth + RLS.</p>
+      </form>
+    </div>
+  </section>
+
+  <section id="adminApp" class="hidden">
+    <div class="section-head"><div><p class="eyebrow">Logged in as <span id="adminEmailLabel">Admin</span></p><h1 class="section-title">Admin Panel</h1></div><div><button id="refreshAdmin" class="ghost-btn">Refresh</button><button id="exportProducts" class="pill-btn primary">Export products.js</button></div></div>
+    <div class="admin-grid">
+      <aside class="admin-side">
+        <button class="admin-tab active" data-panel="panelDashboard">Dashboard</button>
+        <button class="admin-tab" data-panel="panelProducts">Products</button>
+        <button class="admin-tab" data-panel="panelLeads">Leads</button>
+        <button class="admin-tab" data-panel="panelAnalytics">Analytics</button>
+        <button class="admin-tab" data-panel="panelSetup">Supabase Setup</button>
+      </aside>
+      <div>
+        <div id="panelDashboard" class="admin-panel active">
+          <div class="stat-grid">
+            <div class="stat-card"><span class="text-muted">Total products</span><strong id="statProducts">0</strong></div>
+            <div class="stat-card"><span class="text-muted">Published</span><strong id="statPublished">0</strong></div>
+            <div class="stat-card"><span class="text-muted">Featured</span><strong id="statFeatured">0</strong></div>
+            <div class="stat-card"><span class="text-muted">Leads</span><strong id="statLeads">0</strong></div>
+          </div>
+          <div class="glass-card"><h2 class="section-title">Workflow</h2><p class="text-muted">Add products → paste Blinkstore/Qikink product link → publish → test shop page. If Supabase is disabled, export products.js and replace the file on GitHub.</p></div>
+        </div>
+
+        <div id="panelProducts" class="admin-panel">
+          <div id="productEditorCard" class="glass-card">
+            <h2 id="editorTitle" class="section-title">Add Product</h2>
+            <form id="productForm" class="product-editor">
+              <input id="pId" type="hidden">
+              <label class="filter-group"><span>Product title</span><input id="pTitle" class="input" placeholder="Born After Dark Oversized Tee" required></label>
+              <label class="filter-group"><span>Slug</span><input id="pSlug" class="input" placeholder="born-after-dark-tee"></label>
+              <label class="filter-group"><span>Category</span><select id="pCategory" class="select"><option value="tshirts">T-Shirts</option><option value="hoodies">Hoodies</option><option value="lowers">Lowers</option><option value="accessories">Accessories</option></select></label>
+              <label class="filter-group"><span>Gender</span><select id="pGender" class="select"><option value="unisex">Unisex</option><option value="men">Men</option><option value="women">Women</option></select></label>
+              <label class="filter-group"><span>Style</span><select id="pStyle" class="select"><option value="premium">Premium</option><option value="streetwear">Streetwear</option><option value="astrology">Astrology</option><option value="minimal">Minimal</option><option value="dark-luxury">Dark Luxury</option></select></label>
+              <label class="filter-group"><span>Budget</span><select id="pBudget" class="select"><option value="budget">Budget</option><option value="mid" selected>Mid</option><option value="premium">Premium</option></select></label>
+              <label class="filter-group"><span>Price</span><input id="pPrice" class="input" type="number" placeholder="999" required></label>
+              <label class="filter-group"><span>MRP</span><input id="pMrp" class="input" type="number" placeholder="1299"></label>
+              <label class="filter-group"><span>Rating</span><input id="pRating" class="input" type="number" step="0.1" min="0" max="5" value="0"></label>
+              <label class="filter-group"><span>Reviews count</span><input id="pReviews" class="input" type="number" value="0"></label>
+              <label class="filter-group full"><span>Description</span><textarea id="pDescription" class="textarea" rows="4" placeholder="Short product description"></textarea></label>
+              <label class="filter-group"><span>Image URL</span><input id="pImage" class="input" placeholder="https://..."></label>
+              <label class="filter-group"><span>Blinkstore / checkout URL</span><input id="pBlink" class="input" placeholder="https://..."></label>
+              <label><input id="pFeatured" type="checkbox"> Featured on home</label>
+              <label><input id="pPublished" type="checkbox" checked> Published</label>
+              <div class="full"><button class="pill-btn primary" type="submit">Save Product</button><button id="clearProductForm" class="ghost-btn" type="button">Clear</button></div>
+            </form>
+          </div>
+          <div class="table-wrap" style="margin-top:18px"><table><thead><tr><th>Product</th><th>Category</th><th>Gender</th><th>Style</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody id="productsTableBody"></tbody></table></div>
+        </div>
+
+        <div id="panelLeads" class="admin-panel">
+          <div class="section-head"><h2 class="section-title">Newsletter</h2><button id="exportNewsletter" class="ghost-btn">Export CSV</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Email</th><th>Name</th><th>Created</th></tr></thead><tbody id="newsletterList"></tbody></table></div>
+          <div class="section-head" style="margin-top:24px"><h2 class="section-title">Inquiries</h2><button id="exportInquiries" class="ghost-btn">Export CSV</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Subject</th><th>Created</th></tr></thead><tbody id="inquiryList"></tbody></table></div>
+        </div>
+
+        <div id="panelAnalytics" class="admin-panel">
+          <div class="glass-card"><h2 class="section-title">Analytics Events</h2><p class="text-muted">Tracks page views, menu clicks, buy clicks and notification clicks. With Supabase enabled, events can be stored in the database.</p></div>
+          <div class="table-wrap" style="margin-top:18px"><table><thead><tr><th>Event</th><th>Path</th><th>Time</th><th>Metadata</th></tr></thead><tbody id="eventsTableBody"></tbody></table></div>
+        </div>
+
+        <div id="panelSetup" class="admin-panel">
+          <div class="legal-body"><h2>Supabase Setup</h2><ol><li>Open Supabase → SQL Editor.</li><li>Run <code>supabase-schema.sql</code>.</li><li>Create an Auth user for yourself.</li><li>Add your Auth user ID into <code>admin_users</code>.</li><li>Paste Project URL and anon public key in <code>supabase-config.js</code>, then set <code>enabled: true</code>.</li></ol><p>Do not paste service_role key inside website files.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast" role="status"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="products.js"></script>
+<script src="supabase.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
