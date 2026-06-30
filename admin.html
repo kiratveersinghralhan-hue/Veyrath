@@ -6,7 +6,7 @@
   <title>Veyrath Admin Panel</title>
   <meta name="description" content="Admin dashboard for Veyrath products, catalogue, analytics, newsletter and inquiries.">
   <meta name="robots" content="noindex, nofollow">
-  <meta name="theme-color" content="#15120f">
+  <meta name="theme-color" content="#f4f0e7">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -22,13 +22,13 @@
 <main class="container">
   <section id="loginPanel" class="page-hero">
     <div class="two-col">
-      <div><p class="kicker">Veyrath Admin</p><h1 class="page-title">Control<br><span class="grad-text">Room.</span></h1><p class="section-copy">Use Supabase login if configured. Until then, local demo mode lets you add products, export products.js and test the full catalogue system.</p></div>
+      <div><p class="kicker">Veyrath Admin</p><h1 class="page-title">Control<br><span class="grad-text">Room.</span></h1><p class="section-copy">Supabase is configured. Use the local PIN for quick testing, or login with your Supabase Auth admin user after adding your UUID to admin_users.</p></div>
       <form id="adminLoginForm" class="glass-card">
         <p class="eyebrow">Admin Login</p>
         <label class="filter-group"><span>Email</span><input id="adminEmail" class="input" type="email" placeholder="admin@veyrath.in"></label>
         <label class="filter-group"><span>Password / Local PIN</span><input id="adminPassword" class="input" type="password" placeholder="veyrath-admin" required></label>
         <button class="pill-btn primary" type="submit">Enter Admin</button>
-        <p class="text-muted">Local fallback PIN is inside <code>supabase-config.js</code>. Real security needs Supabase Auth + RLS.</p>
+        <p class="text-muted">Quick test PIN works locally. For real admin security, create a Supabase Auth user and add it to <code>admin_users</code>.</p>
       </form>
     </div>
   </section>
@@ -93,7 +93,7 @@
         </div>
 
         <div id="panelSetup" class="admin-panel">
-          <div class="legal-body"><h2>Supabase Setup</h2><ol><li>Open Supabase → SQL Editor.</li><li>Run <code>supabase-schema.sql</code>.</li><li>Create an Auth user for yourself.</li><li>Add your Auth user ID into <code>admin_users</code>.</li><li>Paste Project URL and anon public key in <code>supabase-config.js</code>, then set <code>enabled: true</code>.</li></ol><p>Do not paste service_role key inside website files.</p></div>
+          <div class="legal-body"><h2>Supabase Setup</h2><ol><li>Open Supabase → SQL Editor.</li><li>Run <code>supabase-schema.sql</code>.</li><li>Create an Auth user for yourself.</li><li>Add your Auth user ID into <code>admin_users</code>.</li><li>Your Project URL and anon key are already added in <code>supabase-config.js</code>.</li></ol><p>Do not paste service_role key inside website files.</p></div>
         </div>
       </div>
     </div>

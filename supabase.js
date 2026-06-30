@@ -1,25 +1,26 @@
 (function () {
+  'use strict';
+
   const cfg = window.VEYRATH_SUPABASE || { enabled: false };
   const settings = window.VEYRATH_SETTINGS || {};
   let client = null;
 
-  function hasSupabase() {
-    return !!(cfg.enabled && cfg.https://rpsiddurmwtwvpnwzclo.supabase.co && cfg.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwc2lkZHVybXd0d3Zwbnd6Y2xvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODc5NjMsImV4cCI6MjA5MTI2Mzk2M30.ROGegxjw-HOCkml-5vU19Fd5Bjwn64XpbGIagu8_DMc && cfg.url.includes('http') && window.supabase);
-  }
-
-  function getClient() {
-    if (!hasSupabase()) return null;
-    if (!client) client = window.supabase.createClient(cfg.https://rpsiddurmwtwvpnwzclo.supabase.co, cfg.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwc2lkZHVybXd0d3Zwbnd6Y2xvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODc5NjMsImV4cCI6MjA5MTI2Mzk2M30.ROGegxjw-HOCkml-5vU19Fd5Bjwn64XpbGIagu8_DMc);
-    return client;
+  function safeParse(value, fallback) {
+    try { return JSON.parse(value) ?? fallback; }
+    catch (_) { return fallback; }
   }
 
   const local = {
-    get(key, fallback) {
-      try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-      catch { return fallback; }
-    },
+    get(key, fallback) { return safeParse(localStorage.getItem(key), fallback); },
     set(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
   };
+
+  function makeId() {
+    try {
+      if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') return globalThis.crypto.randomUUID();
+    } catch (_) {}
+    return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
 
   function slugify(str) {
     return String(str || '')
@@ -29,8 +30,29 @@
       .replace(/(^-|-$)/g, '') || `item-${Date.now()}`;
   }
 
-  function normalizeProduct(p) {
-    const id = p.id || (crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  function hasSupabase() {
+    return !!(
+      cfg.enabled === true &&
+      cfg.url &&
+      cfg.anonKey &&
+      /^https:\/\/.+\.supabase\.co\/?$/.test(String(cfg.url).trim()) &&
+      window.supabase &&
+      typeof window.supabase.createClient === 'function'
+    );
+  }
+
+  function getClient() {
+    if (!hasSupabase()) return null;
+    if (!client) {
+      client = window.supabase.createClient(String(cfg.url).trim(), String(cfg.anonKey).trim(), {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+    }
+    return client;
+  }
+
+  function normalizeProduct(p = {}) {
+    const id = p.id || makeId();
     const title = p.title || 'Untitled Product';
     return {
       id,
@@ -43,11 +65,11 @@
       price: Number(p.price || 0),
       mrp: Number(p.mrp || 0),
       rating: Number(p.rating || 0),
-      reviews_count: Number(p.reviews_count || 0),
+      reviews_count: Number(p.reviews_count || p.review_count || 0),
       description: p.description || '',
-      image_url: p.image_url || '',
+      image_url: p.image_url || p.image || '',
       gallery: Array.isArray(p.gallery) ? p.gallery : [],
-      blink_url: p.blink_url || '',
+      blink_url: p.blink_url || p.blinkUrl || '',
       is_featured: !!p.is_featured,
       is_published: p.is_published !== false,
       created_at: p.created_at || new Date().toISOString(),
@@ -65,24 +87,25 @@
         if (error) throw error;
         return (data || []).map(normalizeProduct);
       } catch (err) {
-        console.warn('Supabase products fallback:', err.message);
+        console.warn('Veyrath: Supabase products fallback:', err.message || err);
       }
     }
 
     const localProducts = local.get('veyrath_products', null);
     const fallback = window.VEYRATH_PRODUCTS || [];
     const products = localProducts || fallback;
-    return includeDrafts ? products.map(normalizeProduct) : products.filter(p => p.is_published !== false).map(normalizeProduct);
+    return (includeDrafts ? products : products.filter(p => p.is_published !== false)).map(normalizeProduct);
   }
 
   async function saveProduct(product) {
     const normalized = normalizeProduct(product);
     const sb = getClient();
-    if (sb) {
-      const { data, error } = await sb.from('products').upsert(normalized).select().single();
+    if (sb && sessionStorage.getItem('veyrath_admin_supabase') === 'yes') {
+      const { data, error } = await sb.from('products').upsert(normalized, { onConflict: 'id' }).select().single();
       if (error) throw error;
       return normalizeProduct(data);
     }
+
     const products = local.get('veyrath_products', []);
     const index = products.findIndex(p => p.id === normalized.id);
     if (index >= 0) products[index] = normalized;
@@ -93,7 +116,7 @@
 
   async function deleteProduct(id) {
     const sb = getClient();
-    if (sb) {
+    if (sb && sessionStorage.getItem('veyrath_admin_supabase') === 'yes') {
       const { error } = await sb.from('products').delete().eq('id', id);
       if (error) throw error;
       return true;
@@ -105,12 +128,16 @@
 
   async function saveLead(type, payload) {
     const record = { ...payload, source: type, created_at: new Date().toISOString() };
-    const sb = getClient();
     const table = type === 'newsletter' ? 'newsletter' : 'inquiries';
+    const sb = getClient();
     if (sb) {
-      const { error } = await sb.from(table).insert(record);
-      if (error) throw error;
-      return true;
+      try {
+        const { error } = await sb.from(table).insert(record);
+        if (error) throw error;
+        return true;
+      } catch (err) {
+        console.warn('Veyrath: lead saved locally because Supabase insert failed:', err.message || err);
+      }
     }
     const key = type === 'newsletter' ? 'veyrath_newsletter' : 'veyrath_inquiries';
     const items = local.get(key, []);
@@ -120,12 +147,7 @@
   }
 
   async function trackEvent(event_name, metadata = {}) {
-    const event = {
-      event_name,
-      page_path: location.pathname,
-      metadata,
-      created_at: new Date().toISOString()
-    };
+    const event = { event_name, page_path: location.pathname, metadata, created_at: new Date().toISOString() };
     const localEvents = local.get('veyrath_events', []);
     localEvents.unshift(event);
     local.set('veyrath_events', localEvents.slice(0, 1000));
@@ -133,14 +155,14 @@
     const sb = getClient();
     if (sb) {
       try { await sb.from('event_logs').insert(event); }
-      catch (err) { console.warn('Event log skipped:', err.message); }
+      catch (err) { console.warn('Veyrath: event log skipped:', err.message || err); }
     }
   }
 
   async function getAdminData() {
     const products = await loadProducts({ includeDrafts: true });
     const sb = getClient();
-    if (sb) {
+    if (sb && sessionStorage.getItem('veyrath_admin_supabase') === 'yes') {
       try {
         const [newsletterRes, inquiriesRes, eventsRes] = await Promise.all([
           sb.from('newsletter').select('*').order('created_at', { ascending: false }).limit(200),
@@ -154,7 +176,7 @@
           events: eventsRes.data || []
         };
       } catch (err) {
-        console.warn('Admin Supabase data fallback:', err.message);
+        console.warn('Veyrath: admin Supabase data fallback:', err.message || err);
       }
     }
     return {
@@ -166,33 +188,48 @@
   }
 
   async function signIn(email, passwordOrPin) {
+    const pin = settings.fallbackAdminPin || 'veyrath-admin';
+
+    // Local PIN must always work as an emergency fallback, even if Supabase is enabled.
+    if (settings.allowLocalFallback !== false && passwordOrPin === pin) {
+      const fakeUser = { id: 'local-admin', email: email || 'local-admin@veyrath.in', mode: 'local' };
+      sessionStorage.setItem('veyrath_admin', JSON.stringify(fakeUser));
+      sessionStorage.removeItem('veyrath_admin_supabase');
+      return fakeUser;
+    }
+
     const sb = getClient();
     if (sb && email && email.includes('@')) {
       const { data, error } = await sb.auth.signInWithPassword({ email, password: passwordOrPin });
       if (error) throw error;
+      sessionStorage.setItem('veyrath_admin', JSON.stringify(data.user));
+      sessionStorage.setItem('veyrath_admin_supabase', 'yes');
       return data.user;
     }
-    if ((settings.allowLocalFallback !== false) && passwordOrPin === (settings.fallbackAdminPin || 'veyrath-admin')) {
-      const fakeUser = { id: 'local-admin', email: email || 'local@veyrath' };
-      sessionStorage.setItem('veyrath_admin', JSON.stringify(fakeUser));
-      return fakeUser;
-    }
-    throw new Error('Invalid login. Use Supabase auth or the local fallback PIN.');
+
+    throw new Error('Invalid login. Use your Supabase Auth email/password or the local fallback PIN.');
   }
 
   async function signOut() {
     const sb = getClient();
-    if (sb) await sb.auth.signOut();
+    if (sb) {
+      try { await sb.auth.signOut(); } catch (_) {}
+    }
     sessionStorage.removeItem('veyrath_admin');
+    sessionStorage.removeItem('veyrath_admin_supabase');
   }
 
   async function getUser() {
+    const localAdmin = safeParse(sessionStorage.getItem('veyrath_admin'), null);
+    if (localAdmin) return localAdmin;
     const sb = getClient();
     if (sb) {
-      const { data } = await sb.auth.getUser();
-      if (data && data.user) return data.user;
+      try {
+        const { data } = await sb.auth.getUser();
+        if (data && data.user) return data.user;
+      } catch (_) {}
     }
-    return local.get('veyrath_customer_user', null) || JSON.parse(sessionStorage.getItem('veyrath_admin') || 'null');
+    return local.get('veyrath_customer_user', null);
   }
 
   async function customerLogin(email) {
