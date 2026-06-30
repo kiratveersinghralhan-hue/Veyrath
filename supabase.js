@@ -3,7 +3,8 @@
 
   const KEYS = {
     products: 'veyrath_products', settings: 'veyrath_settings', slides: 'veyrath_slides',
-    inquiries: 'veyrath_inquiries', newsletter: 'veyrath_newsletter', events: 'veyrath_events'
+    inquiries: 'veyrath_inquiries', newsletter: 'veyrath_newsletter', events: 'veyrath_events',
+    coupons: 'veyrath_coupons', orders: 'veyrath_orders'
   };
   const seed = () => window.VEYRATH_SEED || { defaultProducts: [], defaultSlides: [], defaultSettings: {} };
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -22,6 +23,7 @@
   const localProducts = () => read(KEYS.products, seed().defaultProducts);
   const localSettings = () => ({ ...clone(seed().defaultSettings), ...read(KEYS.settings, {}) });
   const localSlides = () => read(KEYS.slides, seed().defaultSlides);
+  const localCoupons = () => read(KEYS.coupons, seed().defaultCoupons || []);
 
   const api = {
     state,
@@ -169,6 +171,70 @@
       return true;
     },
 
+    async getCoupons(options = {}) {
+      await api.init();
+      const includeInactive = Boolean(options.includeInactive && state.isAdmin);
+      if (state.client) {
+        try {
+          let query = state.client.from('coupons').select('*').order('created_at', { ascending: false });
+          if (!includeInactive) query = query.eq('is_active', true);
+          const { data, error } = await query;
+          if (error) throw error;
+          if (data?.length) return data;
+        } catch (error) { state.lastError = error; }
+      }
+      const items = localCoupons();
+      return includeInactive ? items : items.filter((coupon) => coupon.is_active !== false);
+    },
+
+    async saveCoupon(coupon) {
+      const clean = { ...coupon, code: String(coupon.code || '').trim().toUpperCase(), updated_at: new Date().toISOString() };
+      if (!clean.id) clean.id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+      if (state.client && state.isAdmin) {
+        const { data, error } = await state.client.from('coupons').upsert(clean).select().single();
+        if (error) throw error;
+        return data;
+      }
+      const items = localCoupons(); const index = items.findIndex((item) => String(item.id) === String(clean.id));
+      if (index >= 0) items[index] = clean; else items.unshift(clean);
+      write(KEYS.coupons, items); return clean;
+    },
+
+    async deleteCoupon(id) {
+      if (state.client && state.isAdmin) {
+        const { error } = await state.client.from('coupons').delete().eq('id', id);
+        if (error) throw error;
+      } else write(KEYS.coupons, localCoupons().filter((coupon) => String(coupon.id) !== String(id)));
+      return true;
+    },
+
+    async createPendingOrder(customer, items, paymentProvider = 'razorpay') {
+      await api.init();
+      if (!state.client) throw new Error('Secure checkout is temporarily unavailable. Please try again later.');
+      const safeItems = items.map((item) => ({
+        product_id: String(item.product_id || item.id),
+        size: String(item.size || 'One Size'),
+        colour: String(item.colour || 'Default'),
+        quantity: Math.max(1, Math.min(10, Number(item.quantity || item.qty || 1)))
+      }));
+      const { data, error } = await state.client.rpc('create_pending_order', {
+        p_customer: customer,
+        p_items: safeItems,
+        p_payment_provider: paymentProvider
+      });
+      if (error) throw error;
+      return data;
+    },
+
+    async sendOrderToQikink(orderId) {
+      await api.init();
+      if (!state.client || !state.isAdmin) throw new Error('An authenticated admin account is required.');
+      const { data, error } = await state.client.functions.invoke('create-qikink-order', { body: { order_id: orderId } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Qikink did not accept the order.');
+      return data;
+    },
+
     async submitInquiry(payload) {
       await api.init();
       if (state.client) {
@@ -199,7 +265,7 @@
     },
 
     async getAdminRecords(table) {
-      const localMap = { inquiries: KEYS.inquiries, newsletter_signups: KEYS.newsletter, event_logs: KEYS.events };
+      const localMap = { inquiries: KEYS.inquiries, newsletter_signups: KEYS.newsletter, event_logs: KEYS.events, orders: KEYS.orders };
       if (state.client && state.isAdmin) {
         const { data, error } = await state.client.from(table).select('*').order('created_at', { ascending: false }).limit(250);
         if (error) throw error;

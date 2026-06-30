@@ -12,7 +12,8 @@
     signIn: async () => { throw new Error('Supabase is unavailable. Use the local demo PIN.'); }, signOut: async () => {},
     getProducts: async () => clone(seed().defaultProducts), getHeroSlides: async () => clone(seed().defaultSlides), getSettings: async () => clone(seed().defaultSettings),
     saveProduct: async (item) => item, deleteProduct: async () => true, saveHeroSlides: async (items) => items, deleteHeroSlide: async () => true,
-    saveSettings: async (value) => value, getAdminRecords: async () => [], importProducts: (items) => items
+    saveSettings: async (value) => value, getAdminRecords: async () => [], importProducts: (items) => items,
+    sendOrderToQikink: async () => { throw new Error('Qikink sync requires Supabase live mode.'); }
   };
   /* A second defensive boundary: admin stays usable even if both CDN and supabase.js fail. */
   const db = window.VeyrathDB || (window.VeyrathDB = fallback);
@@ -71,7 +72,7 @@
   function editProduct(id) {
     const item = products.find((product) => String(product.id) === String(id)); if (!item) return;
     const form = $('#productForm'); Object.entries(item).forEach(([key, value]) => { const field = form.elements[key]; if (!field) return; if (field.type === 'checkbox') field.checked = Boolean(value); else field.value = Array.isArray(value) ? value.join(', ') : (value ?? ''); });
-    $('#productFormTitle').textContent = `Edit ${item.name}`; activateTab('products'); form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#productFormTitle').textContent = `Edit ${item.name}`; updateProfitEstimate(); activateTab('products'); form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function resetProductForm() { const form = $('#productForm'); form.reset(); form.elements.id.value = ''; form.elements.rating.value = '4.5'; form.elements.sort_order.value = '0'; form.elements.is_published.checked = true; $('#productFormTitle').textContent = 'Add product'; statusText(form, ''); }
@@ -79,7 +80,8 @@
   async function saveProduct(event) {
     event.preventDefault(); const form = event.currentTarget; const raw = formObject(form);
     const old = products.find((item) => String(item.id) === String(raw.id)) || {};
-    const item = { ...old, id: raw.id || undefined, name: raw.name.trim(), slug: raw.slug.trim() || slugify(raw.name), price: Number(raw.price), sale_price: raw.sale_price ? Number(raw.sale_price) : null, rating: Number(raw.rating || 0), sort_order: Number(raw.sort_order || 0), category: raw.category, gender: raw.gender, sizes: split(raw.sizes), colours: split(raw.colours), style: raw.style.trim(), image_url: raw.image_url.trim(), front_image_url: raw.front_image_url.trim(), back_image_url: raw.back_image_url.trim(), blinkstore_url: raw.blinkstore_url.trim(), description: raw.description.trim(), is_published: form.elements.is_published.checked, is_featured: form.elements.is_featured.checked };
+    const sellingPrice = Number(raw.selling_price || raw.price || 0); const baseCost = Number(raw.base_cost || 0); const shippingCharge = Number(raw.shipping_charge || 0);
+    const item = { ...old, id: raw.id || undefined, name: raw.name.trim(), slug: raw.slug.trim() || slugify(raw.name), price: Number(raw.price || sellingPrice), selling_price: sellingPrice, sale_price: raw.sale_price ? Number(raw.sale_price) : null, rating: Number(raw.rating || 0), sort_order: Number(raw.sort_order || 0), category: raw.category, gender: raw.gender, sizes: split(raw.sizes), colours: split(raw.colours), style: raw.style.trim(), image_url: raw.image_url.trim(), front_image_url: raw.front_image_url.trim(), back_image_url: raw.back_image_url.trim(), blinkstore_url: raw.blinkstore_url.trim(), description: raw.description.trim(), qikink_sku: raw.qikink_sku.trim(), qikink_product_id: raw.qikink_product_id.trim(), qikink_variant_id: raw.qikink_variant_id.trim(), print_type: raw.print_type, print_area_front: raw.print_area_front.trim(), print_area_back: raw.print_area_back.trim(), front_design_url: raw.front_design_url.trim(), back_design_url: raw.back_design_url.trim(), base_cost: baseCost, shipping_charge: shippingCharge, profit_margin: Math.max(0, sellingPrice - baseCost - shippingCharge), is_published: form.elements.is_published.checked, is_featured: form.elements.is_featured.checked };
     statusText(form, 'Saving…');
     try { await db.saveProduct(item); resetProductForm(); statusText(form, 'Saved. The catalogue data is current.'); await loadAll(); }
     catch (error) { statusText(form, error.message || 'Could not save product.'); }
@@ -118,12 +120,36 @@
 
   async function loadRecords() {
     try {
-      const [inquiries, newsletter, events] = await Promise.all([db.getAdminRecords('inquiries'), db.getAdminRecords('newsletter_signups'), db.getAdminRecords('event_logs')]);
+      const [inquiries, newsletter, events, orders] = await Promise.all([db.getAdminRecords('inquiries'), db.getAdminRecords('newsletter_signups'), db.getAdminRecords('event_logs'), db.getAdminRecords('orders')].map((request) => request.catch(() => [])));
       $('#statInquiries').textContent = inquiries.length;
+      $('#statOrders').textContent = orders.length;
       $('#inquiryList').innerHTML = inquiries.map((item) => `<div class="data-row"><small>${esc(formatDate(item.created_at))} · ${esc(item.subject || 'Inquiry')}</small><strong>${esc(item.name || 'Anonymous')} · ${esc(item.email || '')}</strong><span>${esc(item.message || item.product || '')}</span></div>`).join('') || '<p>No inquiries yet.</p>';
       $('#newsletterList').innerHTML = newsletter.map((item) => `<div class="data-row"><small>${esc(formatDate(item.created_at))} · ${esc(item.source || 'Website')}</small><strong>${esc(item.email)}</strong></div>`).join('') || '<p>No signups yet.</p>';
       $('#eventList').innerHTML = events.map((item) => `<div class="data-row"><small>${esc(formatDate(item.created_at))} · ${esc(item.page_path || '')}</small><strong>${esc(item.event_name)}</strong><span>${esc(JSON.stringify(item.metadata || {}))}</span></div>`).join('') || '<p>No events yet.</p>';
+      renderOrders(orders);
     } catch (error) { console.info('Admin records unavailable:', error.message); }
+  }
+
+  function renderOrders(orders) {
+    const table = $('#ordersTable'); if (!table) return;
+    table.innerHTML = orders.map((order) => {
+      const paid = order.payment_status === 'paid'; const sync = order.qikink_status || order.status || 'not_sent'; const done = sync === 'qikink_created'; const busy = sync === 'qikink_pending'; const retry = sync === 'qikink_failed';
+      const disabled = !paid || done || busy || mode() !== 'supabase';
+      const label = retry ? 'Retry Qikink' : done ? 'Synced' : busy ? 'Sending…' : paid ? 'Send to Qikink' : 'Awaiting payment';
+      return `<tr><td><strong>${esc(order.order_number)}</strong><br><small>${esc(formatDate(order.created_at))}</small></td><td>${esc(order.customer_name)}<br><small>${esc(order.customer_phone || order.customer_email || '')}</small></td><td><span class="status-chip status-chip--${paid ? 'success' : 'pending'}">${esc(order.payment_status || 'pending')}</span></td><td><span class="status-chip status-chip--${done ? 'success' : retry ? 'error' : 'pending'}">${esc(sync)}</span>${order.qikink_order_id ? `<br><small>${esc(order.qikink_order_id)}</small>` : ''}</td><td>₹${Number(order.total_amount || 0).toLocaleString('en-IN')}</td><td><button class="btn btn--small ${retry ? 'btn--accent' : ''}" type="button" data-qikink-sync="${esc(order.id)}" ${disabled ? 'disabled' : ''}>${label}</button>${order.qikink_last_error ? `<small class="sync-error">${esc(order.qikink_last_error)}</small>` : ''}</td></tr>`;
+    }).join('') || '<tr><td colspan="6">No orders yet.</td></tr>';
+    $$('[data-qikink-sync]', table).forEach((button) => button.addEventListener('click', () => syncQikinkOrder(button.dataset.qikinkSync, button)));
+  }
+
+  async function syncQikinkOrder(orderId, button) {
+    const status = $('#ordersStatus'); button.disabled = true; status.textContent = 'Sending the verified paid order to Qikink…';
+    try { const result = await db.sendOrderToQikink(orderId); status.textContent = `Qikink order created${result.qikink_order_id ? `: ${result.qikink_order_id}` : '.'}`; await loadRecords(); }
+    catch (error) { status.textContent = error.message || 'Qikink sync failed. Review the log and retry.'; button.disabled = false; }
+  }
+
+  function updateProfitEstimate() {
+    const form = $('#productForm'); const selling = Number(form.elements.selling_price?.value || form.elements.price?.value || 0); const base = Number(form.elements.base_cost?.value || 0); const shipping = Number(form.elements.shipping_charge?.value || 0);
+    if (form.elements.profit_margin) form.elements.profit_margin.value = Math.max(0, selling - base - shipping).toFixed(2);
   }
   function formatDate(value) { return value ? new Date(value).toLocaleString('en-IN') : 'Local record'; }
 
@@ -146,12 +172,14 @@
     $$('.admin-tab').forEach((tab) => tab.addEventListener('click', () => activateTab(tab.dataset.adminTab)));
     $$('[data-tab-target]').forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tabTarget)));
     $('#productForm').addEventListener('submit', saveProduct); $('#productReset').addEventListener('click', resetProductForm);
+    ['price', 'selling_price', 'base_cost', 'shipping_charge'].forEach((name) => $('#productForm').elements[name]?.addEventListener('input', updateProfitEstimate));
     $('#heroForm').addEventListener('submit', saveSlide); $('#heroReset').addEventListener('click', resetHeroForm);
     $('#showcaseForm').addEventListener('submit', saveShowcase); $('#siteSettingsForm').addEventListener('submit', saveSiteSettings);
     $('#exportProducts').addEventListener('click', exportProducts); $('#importForm').addEventListener('submit', importProducts); $('#seedJson').addEventListener('click', () => { $('#importJson').value = JSON.stringify(seed().defaultProducts, null, 2); });
     $('#supabaseLoginForm').addEventListener('submit', async (event) => { event.preventDefault(); const form = event.currentTarget; statusText(form, 'Checking Supabase access…'); try { await db.signIn($('#adminEmail').value, $('#adminPassword').value); localMode = false; sessionStorage.removeItem(localKey); statusText(form, 'Access accepted.'); openDashboard(); } catch (error) { statusText(form, error.message || 'Sign-in failed.'); } });
     $('#localLoginForm').addEventListener('submit', (event) => { event.preventDefault(); const form = event.currentTarget; if ($('#localPin').value === 'veyrath-admin') { localMode = true; sessionStorage.setItem(localKey, 'yes'); openDashboard(); } else statusText(form, 'That local PIN is not correct.'); });
     $('#adminSignOut').addEventListener('click', async () => { await db.signOut(); localMode = false; sessionStorage.removeItem(localKey); openLogin(); });
+    $('#refreshOrders')?.addEventListener('click', loadRecords);
   }
 
   async function init() {

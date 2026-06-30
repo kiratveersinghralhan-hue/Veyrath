@@ -7,14 +7,24 @@
   const safeUrl = (value = '', image = false) => {
     const url = String(value).trim();
     if (!url) return '';
-    if (/^(https?:\/\/|\.\.?\/|[a-z0-9_-]+\.html(?:#.*)?$)/i.test(url)) return url;
+    if (/^(https?:\/\/|\.\.?\/|[a-z0-9_./-]+\.(?:html|webp|png|jpe?g|gif|svg|mp4|webm)(?:[?#].*)?)$/i.test(url)) return url;
     if (image && /^data:image\//i.test(url)) return url;
     return '';
   };
   const currency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value) || 0);
+  const effectivePrice = (product) => Number(product.sale_price || product.selling_price || product.price || 0);
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   window.VeyrathUI = { esc, safeUrl, currency, toast, openModal, closeModal };
+  window.VeyrathCheckout = {
+    start(product, size, colour, quantity) {
+      const item = { product_id: String(product.id), name: product.name, image_url: product.image_url || product.front_image_url || '', size: size || product.sizes?.[0] || 'One Size', colour: colour || product.colours?.[0] || 'Default', quantity: Math.max(1, Math.min(10, Number(quantity) || 1)), unit_price: effectivePrice(product) };
+      localStorage.setItem('veyrath_checkout_items', JSON.stringify([item]));
+      location.href = 'checkout.html';
+    },
+    read() { try { return JSON.parse(localStorage.getItem('veyrath_checkout_items') || '[]'); } catch (_) { return []; } },
+    clear() { localStorage.removeItem('veyrath_checkout_items'); }
+  };
 
   function toast(message) {
     let region = $('.toast-region');
@@ -175,10 +185,10 @@
       <div class="product-card__body">
         <div class="product-card__kicker"><span>${esc(product.category)}</span><span>★ ${esc(product.rating || 'New')}</span></div>
         <h3>${esc(product.name)}</h3>
-        <div class="product-card__price"><span>${currency(product.sale_price || product.price)}</span>${sale ? `<s>${currency(product.price)}</s>` : ''}</div>
+        <div class="product-card__price"><span>${currency(effectivePrice(product))}</span>${sale ? `<s>${currency(product.price)}</s>` : ''}</div>
         <div class="product-card__actions">
-          ${buyUrl ? `<a class="btn btn--small" href="${esc(buyUrl)}" target="_blank" rel="noopener">Buy now</a>` : `<a class="btn btn--small btn--outline" href="contact.html?product=${encodeURIComponent(product.name)}">Enquire</a>`}
-          <button class="btn btn--small btn--outline" type="button" data-quick-view="${esc(product.id)}">View</button>
+          <button class="btn btn--small btn--accent" type="button" data-quick-view="${esc(product.id)}">Buy now</button>
+          ${buyUrl ? `<a class="btn btn--small btn--outline" href="${esc(buyUrl)}" target="_blank" rel="noopener" aria-label="Open external fulfilment page for ${esc(product.name)}">External ↗</a>` : `<button class="btn btn--small btn--outline" type="button" data-quick-view="${esc(product.id)}">View</button>`}
         </div>
       </div>
     </article>`;
@@ -191,7 +201,10 @@
       if (!product) return;
       const image = safeUrl(product.image_url || product.front_image_url, true);
       const buy = safeUrl(product.blinkstore_url);
-      $('[data-quick-content]').innerHTML = `<div class="quick-view"><div class="quick-view__media">${image ? `<img src="${esc(image)}" alt="${esc(product.name)} product mockup">` : ''}</div><div class="quick-view__copy"><p class="eyebrow">${esc(product.category)}</p><h2>${esc(product.name)}</h2><div class="product-card__price"><span>${currency(product.sale_price || product.price)}</span>${product.sale_price ? `<s>${currency(product.price)}</s>` : ''}</div><p>${esc(product.description || '')}</p><div class="tag-row">${[product.style, ...(product.sizes || []), ...(product.colours || [])].filter(Boolean).map((item) => `<span class="tag">${esc(item)}</span>`).join('')}</div>${buy ? `<a class="btn btn--accent" href="${esc(buy)}" target="_blank" rel="noopener">Buy on Blinkstore</a>` : `<a class="btn btn--outline" href="contact.html?product=${encodeURIComponent(product.name)}">Ask about this piece</a>`}</div></div>`;
+      const sizes = (product.sizes?.length ? product.sizes : ['One Size']);
+      const colours = (product.colours?.length ? product.colours : ['Default']);
+      $('[data-quick-content]').innerHTML = `<div class="quick-view"><div class="quick-view__media">${image ? `<img src="${esc(image)}" alt="${esc(product.name)} product mockup">` : ''}</div><div class="quick-view__copy"><p class="eyebrow">${esc(product.category)}</p><h2>${esc(product.name)}</h2><div class="product-card__price"><span>${currency(effectivePrice(product))}</span>${product.sale_price ? `<s>${currency(product.price)}</s>` : ''}</div><p>${esc(product.description || '')}</p><div class="quick-buy-grid"><div class="field"><label for="quickSize">Size</label><select id="quickSize">${sizes.map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join('')}</select></div><div class="field"><label for="quickColour">Colour</label><select id="quickColour">${colours.map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join('')}</select></div><div class="field"><label for="quickQuantity">Quantity</label><select id="quickQuantity">${[1,2,3,4,5].map((item) => `<option value="${item}">${item}</option>`).join('')}</select></div></div><button class="btn btn--accent quick-buy-button" id="quickBuyButton" type="button">Continue to secure checkout</button>${buy ? `<a class="text-link quick-external-link" href="${esc(buy)}" target="_blank" rel="noopener">Use external fulfilment page</a>` : ''}<p class="micro-copy">Payment remains pending until it is verified by the configured payment provider.</p></div></div>`;
+      $('#quickBuyButton')?.addEventListener('click', () => window.VeyrathCheckout.start(product, $('#quickSize').value, $('#quickColour').value, $('#quickQuantity').value));
       openModal('#quickViewModal'); window.VeyrathDB.logEvent('product_quick_view', { product_id: product.id });
     }));
   }

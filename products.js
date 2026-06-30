@@ -65,15 +65,22 @@
   ];
 
   const defaultSlides = [
-    { id: 'signal', eyebrow: 'VEYRATH / INDIA', title: 'Streetwear for the hours that shape you.', text: 'Oversized silhouettes. Celestial restraint. Made after you order.', cta_label: 'Enter catalogue', cta_link: 'shop.html', is_published: true, sort_order: 1 },
-    { id: 'after-dark', eyebrow: 'BORN AFTER DARK', title: 'Quiet design. Loud presence.', text: 'Astrology-coded graphics built for real rotation, not one-night hype.', cta_label: 'Read our story', cta_link: 'about.html', is_published: true, sort_order: 2 },
-    { id: 'made-on-demand', eyebrow: 'NO DEAD STOCK', title: 'Your piece begins after your order.', text: 'Print-on-demand helps us start lean, learn fast, and make with intent.', cta_label: 'How it works', cta_link: 'about.html#process', is_published: true, sort_order: 3 }
+    { id: 'signal', eyebrow: 'VEYRATH / INDIA', title: 'Wear the night before it wears you.', text: 'Oversized streetwear for the hours that change everything. Launch pricing is live.', cta_label: 'Shop the catalogue', cta_link: 'shop.html', is_published: true, sort_order: 1 },
+    { id: 'after-dark', eyebrow: 'BORN AFTER DARK', title: 'A quieter kind of statement.', text: 'Astrology-coded graphics, heavyweight presence, and silhouettes made for repeat rotation.', cta_label: 'Explore the story', cta_link: 'about.html', is_published: true, sort_order: 2 },
+    { id: 'made-on-demand', eyebrow: 'MADE FOR YOUR ORDER', title: 'Less dead stock. More intention.', text: 'Every order starts a making process—built lean in India, designed to travel further.', cta_label: 'How it works', cta_link: 'about.html#process', is_published: true, sort_order: 3 }
+  ];
+
+  const defaultCoupons = [
+    { id: 'afterdark10', code: 'AFTERDARK10', description: '10% off your first night order', discount_type: 'percent', discount_value: 10, min_order_value: 999, max_discount: 300, usage_limit: 500, used_count: 0, starts_at: null, ends_at: null, is_active: true },
+    { id: 'night150', code: 'NIGHT150', description: '₹150 off orders above ₹1,499', discount_type: 'fixed', discount_value: 150, min_order_value: 1499, max_discount: null, usage_limit: 250, used_count: 0, starts_at: null, ends_at: null, is_active: true }
   ];
 
   const defaultSettings = {
     collection_title: '',
     announcement: 'Born After Dark · Made after order · Built in India',
-    hero_media_url: '',
+    hero_media_url: 'hero-campaign.webp',
+    shipping_fee: 99,
+    free_shipping_threshold: 1999,
     showcase: {
       product_id: 'nocturne-oversized-tee',
       product_name: 'Nocturne Oversized Tee',
@@ -85,5 +92,5 @@
     }
   };
 
-  window.VEYRATH_SEED = Object.freeze({ defaultProducts, defaultSlides, defaultSettings });
+  window.VEYRATH_SEED = Object.freeze({ defaultProducts, defaultSlides, defaultSettings, defaultCoupons });
 })();
