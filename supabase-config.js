@@ -3,5 +3,5 @@
    Project URL and anon/public key from Supabase > Project Settings > API. */
 window.VEYRATH_SUPABASE = {
   url: 'https://cefxwkvefadptyzeayfx.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwc2lkZHVybXd0d3Zwbnd6Y2xvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODc5NjMsImV4cCI6MjA5MTI2Mzk2M30.ROGegxjw-HOCkml-5vU19Fd5Bjwn64XpbGIagu8_DMc'
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlZnh3a3ZlZmFkcHR5emVheWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3OTY3MzMsImV4cCI6MjA5ODM3MjczM30.CqM8TkZUjCN8SMKsXHqpMiFsS1hKdYn6CVcgHCWiG9k'
 };
