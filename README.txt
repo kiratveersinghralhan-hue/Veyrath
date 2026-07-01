@@ -13,8 +13,11 @@ SUPABASE SETUP
 2. Open SQL Editor and run the complete supabase-schema.sql file.
    WARNING: this reset file deletes the old VEYRATH site tables and their data.
    It does not delete Authentication users.
-3. The supplied public project URL and anon key are already set in supabase-config.js.
-4. Open admin.html and sign in with the Supabase Auth account.
+3. If the Auth user was created after the main schema was run, execute
+   admin-access.sql once to grant that user VEYRATH admin access.
+4. The supplied public project URL and anon key are already set in supabase-config.js.
+5. Open admin.html and sign in with the Supabase Auth account. The email field is
+   intentionally blank. A secure email sign-in link is available as a fallback.
 
 SECURITY
 - The admin password is never included in HTML, JavaScript, SQL or this ZIP.
