@@ -1,0 +1,42 @@
+VEYRATH ADMIN LOGIN FIX
+======================
+
+Problem:
+If the email sign-in link opens another Supabase project, the website is connected to that other project.
+Admin login must happen in the exact Supabase project shown on admin.html.
+
+Check this first:
+1. Open admin.html.
+2. Look for "Connected Supabase project: ...".
+3. Current bundled project ref is:
+   rpsiddurmwtwvpnwzclo
+
+If this is NOT your VEYRATH Supabase project:
+1. Open the correct VEYRATH Supabase dashboard.
+2. Go to Project Settings > API.
+3. Copy the Project URL.
+4. Copy the anon/public key.
+5. Replace these two values in supabase-config.js:
+   url: 'https://YOUR-VEYRATH-PROJECT.supabase.co'
+   anonKey: 'YOUR-VEYRATH-ANON-KEY'
+6. Upload the updated supabase-config.js to GitHub Pages.
+
+Then create/reset the admin user in that same VEYRATH project:
+1. Supabase Dashboard > Authentication > Users.
+2. Create or open:
+   kiratveersinghralhan@gmail.com
+3. Set/reset the password directly in Supabase Auth.
+   Do not put the password in website files or SQL.
+4. Open SQL Editor in the same project.
+5. Run admin-access.sql.
+
+If your browser is stuck:
+1. Open admin.html.
+2. Click "Clear saved Supabase session".
+3. Refresh.
+4. Confirm the project shown is the VEYRATH project.
+5. Login again.
+
+Important:
+Passwords cannot be recovered from Supabase or safely added to this static site.
+If you do not know the password, reset it inside Supabase Authentication > Users.
