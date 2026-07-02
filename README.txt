@@ -7,6 +7,7 @@ WHAT IS INCLUDED
 - Server-calculated pending orders in Supabase.
 - Razorpay order creation, payment signature verification and webhook handling.
 - Admin order list, payment/Printrove status, manual hold, retry, sync and CSV export.
+- Multi-image product galleries stored in the public product-images bucket; only admins can upload or replace files.
 - Manual Printrove fulfilment by default.
 - All private credentials stay in Supabase Edge Function secrets.
 
@@ -47,6 +48,10 @@ B. SQL Editor:
    - It does not delete Authentication users.
    - If the admin Auth user already exists, the schema activates it automatically.
    - Otherwise create the Auth user and then run admin-access.sql.
+
+   Existing Phase 2 database (do not reset):
+   - Run product-gallery-migration.sql once instead.
+   - It preserves all products and orders while creating the product-images bucket.
 
 C. Authentication > URL Configuration:
    Site URL:

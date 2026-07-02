@@ -391,6 +391,20 @@ create index order_items_order_idx on public.order_items(order_id);
 create index payment_logs_order_idx on public.payment_logs(order_id,created_at desc);
 create index printrove_logs_order_idx on public.printrove_order_logs(order_id,created_at desc);
 
+-- Public product-gallery files. Only active admins may upload, replace or delete.
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('product-images','product-images',true,5242880,array['image/jpeg','image/png','image/webp'])
+on conflict(id) do update set public=true,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
+
+drop policy if exists "Public reads VEYRATH product images" on storage.objects;
+drop policy if exists "Admins upload VEYRATH product images" on storage.objects;
+drop policy if exists "Admins update VEYRATH product images" on storage.objects;
+drop policy if exists "Admins delete VEYRATH product images" on storage.objects;
+create policy "Public reads VEYRATH product images" on storage.objects for select to anon,authenticated using(bucket_id='product-images');
+create policy "Admins upload VEYRATH product images" on storage.objects for insert to authenticated with check(bucket_id='product-images' and public.is_admin());
+create policy "Admins update VEYRATH product images" on storage.objects for update to authenticated using(bucket_id='product-images' and public.is_admin()) with check(bucket_id='product-images' and public.is_admin());
+create policy "Admins delete VEYRATH product images" on storage.objects for delete to authenticated using(bucket_id='product-images' and public.is_admin());
+
 commit;
 
 -- If the Auth user is created after this reset, run admin-access.sql once.

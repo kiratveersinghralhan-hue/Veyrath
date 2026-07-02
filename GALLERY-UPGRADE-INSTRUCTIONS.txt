@@ -1,0 +1,28 @@
+VEYRATH MULTI-IMAGE GALLERY UPGRADE
+===================================
+
+1. In the VEYRATH Supabase SQL Editor, run product-gallery-migration.sql once.
+   It does not delete products, orders or existing data.
+
+2. Upload these updated files to the root of the GitHub Pages repository:
+   admin.html
+   admin.js
+   app.js
+   styles.css
+   index.html
+   shop.html
+
+3. Wait for GitHub Pages to deploy, then hard-refresh with Ctrl+F5.
+
+4. Open admin.html, edit the product and choose all mockups together under
+   Upload product gallery. The first selected image becomes the cover.
+
+5. Saving a new selection replaces that product's existing gallery. Choosing no
+   files keeps the existing gallery unchanged.
+
+Limits and storage:
+- Up to 30 images per product selection.
+- JPG, PNG and WebP accepted, maximum 5 MB per original file.
+- Images are resized/compressed to WebP and uploaded to the public product-images
+  Supabase Storage bucket.
+- Only active admin_users can upload, replace or delete gallery files.
