@@ -87,11 +87,12 @@
 
   async function submit(event) {
     event.preventDefault();
-    if (!activeProduct || !event.currentTarget.reportValidity()) return;
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLFormElement) || !activeProduct || !form.reportValidity()) return;
     setBusy(true, 'Creating secure order…'); message('Confirming price and availability…');
     try {
       const supabase = await ensureClient();
-      const values = Object.fromEntries(new FormData(event.currentTarget));
+      const values = Object.fromEntries(new FormData(form));
       values.phone = String(values.phone || '').replace(/\D/g, '');
       values.pincode = String(values.pincode || '').replace(/\D/g, '');
       const { data: pending, error: pendingError } = await supabase.rpc('create_pending_order', {
@@ -124,7 +125,7 @@
             message(await functionError(verifyError, verified?.error || 'Payment verification is pending. Please keep your payment ID.'), 'error'); setBusy(false); return;
           }
           sessionStorage.removeItem('veyrath_pending_order');
-          event.currentTarget.reset();
+          form.reset();
           $('#checkoutTitle').textContent = 'Payment confirmed.';
           message(`Order ${verified.order_number} is paid. We will prepare it after dark.`, 'success');
           $('#checkoutSubmit').hidden = true;
