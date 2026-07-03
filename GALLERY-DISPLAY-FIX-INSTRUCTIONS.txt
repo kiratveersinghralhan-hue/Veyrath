@@ -1,0 +1,21 @@
+VEYRATH GALLERY DISPLAY FIX
+
+Upload these four files to the ROOT of your GitHub repository and replace the existing copies:
+
+1. app.js
+2. index.html
+3. shop.html
+4. styles.css
+
+Do not change or replace supabase-config.js. It is intentionally not included in this ZIP.
+
+After GitHub Pages finishes deploying, open the website in a new tab and press Ctrl+F5 once.
+
+What this fixes:
+- Loads the current catalogue directly from the VEYRATH Supabase project.
+- Stops an old browser-cached product from replacing the current product data.
+- Accepts secure Supabase Storage image URLs.
+- Displays every uploaded product image in the quick-view gallery.
+- Adds working Previous/Next controls and an image counter.
+
+Verified with the current VEYRATH product: 22 images loaded and gallery navigation advanced from 1 / 22 to 2 / 22 with no console errors.

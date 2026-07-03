@@ -8,17 +8,28 @@
   const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
   const esc = (v = '') => String(v).replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
   const money = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v) || 0);
-  const safeImage = (v = '') => /^(https?:\/\/|data:image\/|[a-z0-9_.-]+\.(?:png|jpe?g|webp|gif|svg)(?:[?#].*)?)$/i.test(String(v).trim()) ? String(v).trim() : '';
+  const safeImage = (v = '') => /^(https?:\/\/[^\s"'<>]+|data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+|[a-z0-9_.-]+\.(?:png|jpe?g|webp|gif|svg)(?:[?#].*)?)$/i.test(String(v).trim()) ? String(v).trim() : '';
   const safeLink = (v = '') => /^(https?:\/\/|[a-z0-9_.-]+\.html(?:[?#].*)?|#[a-z0-9_-]+)$/i.test(String(v).trim()) ? String(v).trim() : '';
   const split = (v) => Array.isArray(v) ? v : String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
   const productImages = (product = {}) => [...new Set([product.image_url, ...(Array.isArray(product.images) ? product.images : []), product.back_image_url, product.front_image_url].map(safeImage).filter(Boolean))];
-  let remoteProducts = null; let remoteSite = null; let supabaseClient = null;
-  const products = () => (Array.isArray(remoteProducts) ? remoteProducts : read(KEYS.products, window.VEYRATH_PRODUCTS || [])).filter((p) => p && p.is_published !== false);
+  let remoteProducts = null; let remoteSite = null; let supabaseClient = null; let remoteConfigured = false;
+  const products = () => (Array.isArray(remoteProducts) ? remoteProducts : remoteConfigured ? [] : read(KEYS.products, window.VEYRATH_PRODUCTS || [])).filter((p) => p && p.is_published !== false);
   const site = () => remoteSite || read(KEYS.site, window.VEYRATH_SITE_DATA || {});
+  async function fetchPublicProducts(cfg) {
+    const endpoint = `${String(cfg.url).replace(/\/$/, '')}/rest/v1/storefront_products?select=*&order=sort_order.desc`;
+    const response = await fetch(endpoint, { cache: 'no-store', headers: { apikey: cfg.anonKey, Authorization: `Bearer ${cfg.anonKey}`, Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Catalogue request failed (${response.status})`);
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('Catalogue response was not a list');
+    return rows;
+  }
   async function connectRemote() {
     const cfg = window.VEYRATH_SUPABASE || {}; if (!/^https:\/\//.test(cfg.url || '') || !cfg.anonKey || cfg.anonKey.includes('YOUR_')) return;
-    if (!window.supabase) { try { await new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; script.onload = resolve; script.onerror = reject; document.head.appendChild(script); }); } catch (_) { return; } }
-    try { supabaseClient = window.supabase.createClient(cfg.url, cfg.anonKey); const [catalogue, settings, slides] = await Promise.all([supabaseClient.from('storefront_products').select('*').order('sort_order', { ascending: false }), supabaseClient.from('site_settings').select('value').eq('key', 'site_data').maybeSingle(), supabaseClient.from('hero_slides').select('*').eq('is_published', true).order('sort_order')]); if (!catalogue.error) remoteProducts = catalogue.data || []; const base = read(KEYS.site, window.VEYRATH_SITE_DATA || {}); remoteSite = settings.data?.value ? { ...base, ...settings.data.value } : base; if (!slides.error && slides.data?.length) remoteSite.banners = slides.data.map((s) => ({ id: s.id, image_url: s.image_url, eyebrow: s.eyebrow, heading: s.heading, text: s.body, align: s.align || 'left' })); } catch (_) { supabaseClient = null; }
+    remoteConfigured = true;
+    try { remoteProducts = await fetchPublicProducts(cfg); write(KEYS.products, remoteProducts); } catch (_) { /* Supabase client below provides a second catalogue path. */ }
+    if (!window.supabase) { try { await new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; script.onload = resolve; script.onerror = reject; document.head.appendChild(script); }); } catch (_) { remoteProducts ||= []; return; } }
+    try { supabaseClient = window.supabase.createClient(cfg.url, cfg.anonKey); const requests = [supabaseClient.from('site_settings').select('value').eq('key', 'site_data').maybeSingle(), supabaseClient.from('hero_slides').select('*').eq('is_published', true).order('sort_order')]; if (!Array.isArray(remoteProducts)) requests.push(supabaseClient.from('storefront_products').select('*').order('sort_order', { ascending: false })); const [settings, slides, catalogue] = await Promise.all(requests); if (catalogue && !catalogue.error) { remoteProducts = catalogue.data || []; write(KEYS.products, remoteProducts); } const base = read(KEYS.site, window.VEYRATH_SITE_DATA || {}); remoteSite = settings.data?.value ? { ...base, ...settings.data.value } : base; if (!slides.error && slides.data?.length) remoteSite.banners = slides.data.map((s) => ({ id: s.id, image_url: s.image_url, eyebrow: s.eyebrow, heading: s.heading, text: s.body, align: s.align || 'left' })); } catch (_) { supabaseClient = null; }
+    remoteProducts ||= [];
   }
 
   function header() {
