@@ -17,5 +17,9 @@ What this fixes:
 - Accepts secure Supabase Storage image URLs.
 - Displays every uploaded product image in the quick-view gallery.
 - Adds working Previous/Next controls and an image counter.
+- Centres desktop arrows directly over the product image instead of below it.
+- Fixes the mobile modal width and close-button alignment.
+- Adds smoother gallery, hover, opening and backdrop transitions.
+- Prevents horizontal overflow at mobile sizes.
 
-Verified with the current VEYRATH product: 22 images loaded and gallery navigation advanced from 1 / 22 to 2 / 22 with no console errors.
+Verified with the current VEYRATH product at 1440px desktop and 390px mobile: 22 images loaded, gallery navigation advanced from 1 / 22 to 2 / 22, and no console errors or horizontal overflow were found.
