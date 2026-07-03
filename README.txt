@@ -65,7 +65,7 @@ C. Authentication > URL Configuration:
 From the website project folder:
 
 supabase login
-supabase link --project-ref YOUR_SUPABASE_PROJECT_REF
+supabase link --project-ref cefxwkvefadptyzeayfx
 
 3. SET SERVER SECRETS
 ---------------------
@@ -115,7 +115,7 @@ authenticates every webhook with the Razorpay HMAC signature.
    payment is confirmed as captured.
 4. Add this webhook URL:
 
-   https://YOUR_SUPABASE_PROJECT_REF.functions.supabase.co/razorpay-webhook
+   https://cefxwkvefadptyzeayfx.functions.supabase.co/razorpay-webhook
 
 5. Select events:
    - payment.captured

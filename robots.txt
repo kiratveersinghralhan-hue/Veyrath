@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /admin.html
 
-Sitemap: https://your-domain.example/sitemap.xml
+Sitemap: https://kiratveersinghralhan-hue.github.io/Veyrath/sitemap.xml
