@@ -347,7 +347,7 @@ select id,slug,name,description,category,gender,coalesce(nullif(selling_price,0)
   is_published,is_featured,sort_order,shipping_cost,fulfilment_status,created_at,updated_at
 from public.products where is_published=true;
 
-create view public.admin_products as
+create view public.admin_products with (security_invoker=true) as
 select p.* from public.products p where public.is_admin();
 
 grant usage on schema public to anon,authenticated;
