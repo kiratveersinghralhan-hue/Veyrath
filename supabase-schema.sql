@@ -7,6 +7,7 @@ create extension if not exists pgcrypto;
 
 drop view if exists public.storefront_products cascade;
 drop view if exists public.admin_products cascade;
+drop function if exists public.create_pending_order(jsonb,jsonb,text) cascade;
 drop function if exists public.create_pending_order(jsonb,jsonb) cascade;
 drop function if exists public.is_admin() cascade;
 drop function if exists public.set_updated_at() cascade;
