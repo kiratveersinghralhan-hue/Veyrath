@@ -70,6 +70,10 @@ with expected(table_name, column_name, udt_name) as (values
   ('orders','order_status','text'), ('orders','fulfilment_status','text'),
   ('orders','razorpay_order_id','text'), ('orders','razorpay_payment_id','text'),
   ('orders','razorpay_signature','text'), ('orders','printrove_order_id','text'),
+  ('orders','printrove_status','text'), ('orders','courier_name','text'),
+  ('orders','tracking_number','text'), ('orders','tracking_url','text'),
+  ('orders','payment_fee','numeric'), ('orders','payment_tax','numeric'),
+  ('orders','estimated_settlement_amount','numeric'),
   ('order_items','order_id','uuid'), ('order_items','product_id','uuid'),
   ('order_items','size','text'), ('order_items','colour','text'), ('order_items','quantity','int4'),
   ('order_items','unit_price','numeric'), ('order_items','printrove_variant_id','text'),
@@ -174,7 +178,8 @@ $$;
 
 -- Admin helper and timestamp/order-number functions.
 with expected(signature) as (values
-  ('public.is_admin()'), ('public.set_updated_at()'), ('public.make_order_number()')
+  ('public.is_admin()'), ('public.set_updated_at()'), ('public.make_order_number()'),
+  ('public.track_order(text,text)')
 )
 insert into veyrath_audit_report
 select case when to_regprocedure(e.signature) is null then 1 else 3 end,
@@ -297,7 +302,7 @@ $$;
 -- These deployment/runtime items are intentionally manual: PostgreSQL cannot see Edge Function deployments or secrets.
 insert into veyrath_audit_report values
   (5, 'MANUAL', 'Edge Functions', 'Required deployments',
-   'Check create-razorpay-order, verify-razorpay-payment, razorpay-webhook, send-to-printrove and sync-printrove-status in Supabase > Edge Functions.',
+    'Check create-razorpay-order, verify-razorpay-payment, razorpay-webhook, send-to-printrove, sync-printrove-status and track-order in Supabase > Edge Functions.',
    'Deploy missing functions using the commands in README.txt.'),
   (5, 'MANUAL', 'Secrets', 'Razorpay secrets',
    'Check RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET in Supabase > Edge Functions > Secrets.',

@@ -31,6 +31,7 @@ supabase/functions/verify-razorpay-payment/index.ts
 supabase/functions/razorpay-webhook/index.ts
 supabase/functions/send-to-printrove/index.ts
 supabase/functions/sync-printrove-status/index.ts
+supabase/functions/track-order/index.ts
 
 1. CONFIGURE THE VEYRATH SUPABASE PROJECT
 -----------------------------------------
@@ -50,8 +51,9 @@ B. SQL Editor:
    - Otherwise create the Auth user and then run admin-access.sql.
 
    Existing Phase 2 database (do not reset):
-   - Run product-gallery-migration.sql once instead.
-   - It preserves all products and orders while creating the product-images bucket.
+   - Run veyrath-automatic-orders-upgrade.sql once instead.
+   - It preserves products/orders, reconciles the manual Printrove order, adds
+     tracking/payment-fee fields and enables safe automatic fulfilment.
 
 C. Authentication > URL Configuration:
    Site URL:
@@ -102,6 +104,7 @@ supabase functions deploy verify-razorpay-payment
 supabase functions deploy razorpay-webhook --no-verify-jwt
 supabase functions deploy send-to-printrove
 supabase functions deploy sync-printrove-status
+supabase functions deploy track-order
 
 The --no-verify-jwt flag is required only for the Razorpay webhook because Razorpay
 is an external server and cannot send a Supabase user JWT. The function still
@@ -139,25 +142,21 @@ authenticates every webhook with the Razorpay HMAC signature.
 5. Add the front/back design URLs for internal records. For an existing Printrove
    Product Library variant, Printrove already owns the print design; its Create
    Order API uses the variant ID and does not require a public design URL.
-6. Add base cost, selling price and shipping cost. Profit is calculated as:
-   selling price - base cost - shipping cost.
+6. Add base cost, selling price and shipping cost. The product form shows a rough
+   catalogue margin only. Real net margin must also subtract Printrove GST,
+   Razorpay fee + GST, refunds/RTO, discounts, ads and applicable business tax.
 
-7. SAFE TEST PROCEDURE
-----------------------
-1. Keep site_settings > commerce > auto_send_to_printrove set to false (default).
-2. Publish one correctly mapped product.
-3. Open the GitHub Pages website on mobile and desktop.
-4. Select Buy Now, size, colour and quantity; enter a real serviceable test address.
-5. Complete a Razorpay Test Mode payment.
-6. Confirm the order appears as paid in admin.html.
-7. Compare amount, address and Printrove variant mapping.
-8. Click Send to Printrove only when the mapping is correct.
-9. Confirm the returned Printrove Order ID and sync its status.
-10. Keep fulfilment manual for the first 3-5 successful paid test orders.
-
-Only after those tests should auto_send_to_printrove be changed to true. The
-verify-razorpay-payment function supports auto-send, while the Razorpay webhook
-remains the payment recovery path.
+7. AUTOMATIC FULFILMENT GO-LIVE
+-------------------------------
+1. Follow AUTOMATION-GO-LIVE.txt in order.
+2. Run veyrath-automatic-orders-upgrade.sql once. It safely links the manually
+   created Printrove order before enabling auto_send_to_printrove.
+3. Keep enough Printrove Credits for the manufacturing cost of incoming orders.
+4. Deploy the updated payment and Printrove functions.
+5. Future paid orders are sent automatically using the VEYRATH order number.
+6. A Printrove reference lookup runs before create/retry to prevent duplicates.
+7. Admin refreshes live Printrove status and tracking when opened.
+8. Customers can use track.html with their order number and checkout contact.
 
 8. GO LIVE
 ----------

@@ -1,0 +1,57 @@
+VEYRATH AUTOMATIC ORDERS - ONE-TIME GO-LIVE
+============================================
+
+WHAT THIS VERSION DOES
+----------------------
+1. Razorpay verifies/captures the payment server-side.
+2. Only a paid order can be sent to Printrove.
+3. Printrove receives the VEYRATH order number as its unique reference.
+4. A preflight reference lookup prevents duplicate Printrove orders on retries.
+5. The Printrove order ID is stored in Supabase automatically.
+6. Opening Admin > Orders automatically refreshes active Printrove statuses,
+   courier and tracking information.
+7. Customers can use track.html with order number + checkout email/phone.
+
+DO THIS IN THIS ORDER
+---------------------
+1. Keep enough Printrove Credits available. Printrove cannot manufacture an
+   automatic order from the future Razorpay settlement; it debits its own wallet.
+
+2. In Printrove Merchant Panel:
+   - Settings > brand/company details: set the customer-facing brand to VEYRATH.
+   - Settings > Notifications > Notify Customer: enable Email and SMS.
+   - Let Printrove auto-select the courier according to your shipping settings.
+
+3. Run veyrath-automatic-orders-upgrade.sql in the VEYRATH Supabase SQL Editor.
+   It links the already-created Printrove order before enabling automation.
+   Do not click "Send to Printrove" for that old paid order before running it.
+
+4. Deploy the updated server functions from this folder:
+
+   cd "C:\Users\ACER\Documents\Codex\2026-06-30\files-mentioned-by-the-user-i\outputs\VEYRATH-AUTOMATIC-ORDERS-FINAL"
+   npx supabase link --project-ref cefxwkvefadptyzeayfx
+   npx supabase functions deploy send-to-printrove
+   npx supabase functions deploy sync-printrove-status
+   npx supabase functions deploy track-order
+   npx supabase functions deploy verify-razorpay-payment
+   npx supabase functions deploy razorpay-webhook --no-verify-jwt
+
+5. Upload the root website files plus the supabase folder to GitHub.
+
+6. In Razorpay Dashboard, update the approved customer-facing brand/business
+   display name to VEYRATH. The name in Razorpay's own receipt is controlled by
+   the verified Razorpay account profile, not only by checkout.js.
+
+7. Place one low-value live order. Confirm this chain in Admin > Orders:
+   paid -> printrove_created -> processing -> shipped -> fulfilled
+
+IMPORTANT OPERATING RULES
+-------------------------
+- Never manually create a Printrove order if a Printrove ID already appears in
+  VEYRATH Admin.
+- If Printrove Credits are insufficient, the VEYRATH order remains paid and is
+  marked printrove_failed for review/retry. The customer payment is not lost.
+- A tracking ID is normally generated after production passes QC and the order
+  is prepared for dispatch, not immediately after payment.
+- Refunds must be handled in both places: refund the customer in Razorpay and
+  cancel/refund the supplier order in Printrove if production can still stop.

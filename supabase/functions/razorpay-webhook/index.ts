@@ -31,7 +31,17 @@ Deno.serve(async (req) => {
       const amount = Number(payment?.amount ?? razorpayOrder?.amount_paid ?? 0);
       const currency = String(payment?.currency ?? razorpayOrder?.currency ?? "");
       if (amount === Math.round(Number(order.total_amount) * 100) && currency === order.currency) {
-        await service.from("orders").update({ payment_status: "paid", order_status: "paid", razorpay_payment_id: payment?.id || order.razorpay_payment_id, amount_paid: amount / 100, paid_at: new Date().toISOString() }).eq("id", order.id).neq("payment_status", "paid");
+        const paymentFee = Number(payment?.fee || 0) / 100;
+        await service.from("orders").update({
+          payment_status: "paid",
+          order_status: "paid",
+          razorpay_payment_id: payment?.id || order.razorpay_payment_id,
+          amount_paid: amount / 100,
+          payment_fee: paymentFee,
+          payment_tax: Number(payment?.tax || 0) / 100,
+          estimated_settlement_amount: Math.max(0, (amount / 100) - paymentFee),
+          paid_at: new Date().toISOString(),
+        }).eq("id", order.id).neq("payment_status", "paid");
         const { data: commerce } = await service.from("site_settings").select("value").eq("key", "commerce").maybeSingle();
         if (commerce?.value?.auto_send_to_printrove === true) {
           try { await fulfilWithPrintrove(service, order.id); } catch (fulfilmentError) { console.error("razorpay-webhook auto fulfilment", fulfilmentError); }

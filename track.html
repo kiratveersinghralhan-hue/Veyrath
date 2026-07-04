@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Track Your Order | VEYRATH</title>
+  <meta name="description" content="Securely track a VEYRATH order using the order number and checkout email or phone.">
+  <link rel="canonical" href="https://kiratveersinghralhan-hue.github.io/Veyrath/track.html">
+  <meta name="robots" content="noindex,follow">
+  <meta name="theme-color" content="#080808">
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css?v=20260704-auto-orders">
+</head>
+<body data-page="track">
+  <div data-site-header></div>
+  <main id="main">
+    <header class="page-hero track-hero">
+      <p class="eyebrow">VEYRATH / ORDER SIGNAL</p>
+      <h1>Follow the<br>movement.</h1>
+      <p>Enter your order number and the email or phone used at checkout.</p>
+    </header>
+    <section class="content-section track-section">
+      <div class="track-grid">
+        <form class="track-form" id="trackForm">
+          <p class="eyebrow">SECURE LOOKUP</p>
+          <label>Order number<input id="trackOrderNumber" name="order_number" autocomplete="off" placeholder="VYR-260704-XXXXXXXX" required></label>
+          <label>Email or phone<input name="contact" autocomplete="email" placeholder="Used during checkout" required></label>
+          <button class="btn btn-gold" type="submit">Track order</button>
+          <small>Only limited order and courier status is shown. Payment IDs and addresses remain private.</small>
+          <p class="track-message" id="trackMessage" role="status" aria-live="polite"></p>
+        </form>
+        <article class="track-result" id="trackResult" hidden>
+          <div class="track-result-head"><div><p class="eyebrow">ORDER STATUS</p><h2 id="trackResultNumber"></h2></div><span id="trackResultBadge">Processing</span></div>
+          <ol class="track-timeline">
+            <li id="trackStepPaid"><strong>Payment confirmed</strong><small>Your payment was securely verified.</small></li>
+            <li id="trackStepProduction"><strong>In production</strong><small>Your piece is being prepared and quality checked.</small></li>
+            <li id="trackStepShipped"><strong>Shipped</strong><small>Tracking appears after courier hand-off.</small></li>
+            <li id="trackStepDelivered"><strong>Delivered</strong><small>The movement is complete.</small></li>
+          </ol>
+          <dl class="track-meta"><div><dt>Print / fulfilment</dt><dd id="trackPrintStatus">Awaiting update</dd></div><div><dt>Courier</dt><dd id="trackCourier">Assigned at dispatch</dd></div><div><dt>Tracking ID</dt><dd id="trackNumber">Not generated yet</dd></div></dl>
+          <a class="btn" id="trackCourierLink" href="#" target="_blank" rel="noopener" hidden>Open courier tracking ↗</a>
+        </article>
+      </div>
+    </section>
+  </main>
+  <div data-site-footer></div>
+  <script src="site-data.js?v=20260704-auto-orders" defer></script>
+  <script src="products.js?v=20260704-auto-orders" defer></script>
+  <script src="supabase-config.js?v=20260704-auto-orders" defer></script>
+  <script src="app.js?v=20260704-auto-orders" defer></script>
+  <script src="track.js?v=20260704-auto-orders" defer></script>
+</body>
+</html>
