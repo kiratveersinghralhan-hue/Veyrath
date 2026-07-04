@@ -68,13 +68,13 @@
       const product = await findProduct(productId);
       fillProduct(product);
       $('#productModal')?.close();
-      $('#checkoutDialog').showModal();
-      document.body.classList.add('checkout-open');
+      showCheckout();
     } catch (error) {
       window.alert(error.message || 'Checkout is unavailable right now.');
     }
   }
 
+  function showCheckout() { const dialog = $('#checkoutDialog'); if (dialog && !dialog.open) dialog.showModal(); document.body.classList.add('checkout-open'); }
   function close() { $('#checkoutDialog')?.close(); document.body.classList.remove('checkout-open'); }
   async function loadRazorpay() {
     if (window.Razorpay) return;
@@ -106,6 +106,7 @@
       if (createError || !paymentOrder?.success) throw new Error(await functionError(createError, paymentOrder?.error || 'Could not start Razorpay.'));
       await loadRazorpay();
       setBusy(false); message('Opening Razorpay secure payment…');
+      let razorpayFailureMessage = '';
       const razorpay = new window.Razorpay({
         key: paymentOrder.key_id,
         amount: paymentOrder.amount,
@@ -117,8 +118,9 @@
         prefill: { name: values.name, email: values.email, contact: values.phone },
         notes: { veyrath_order: pending.order_number },
         theme: { color: '#0b0b0b', backdrop_color: 'rgba(0,0,0,.88)' },
-        modal: { ondismiss: () => message(`Payment was not completed. Order ${pending.order_number} remains pending.`, 'notice') },
+        modal: { ondismiss: () => { showCheckout(); setBusy(false); message(razorpayFailureMessage || `Payment was not completed. Order ${pending.order_number} remains pending.`, razorpayFailureMessage ? 'error' : 'notice'); } },
         handler: async (response) => {
+          showCheckout();
           setBusy(true, 'Verifying payment…'); message('Payment received. Verifying it securely…');
           const { data: verified, error: verifyError } = await supabase.functions.invoke('verify-razorpay-payment', { body: { order_id: pending.order_id, ...response } });
           if (verifyError || !verified?.success) {
@@ -131,10 +133,11 @@
           $('#checkoutSubmit').hidden = true;
         },
       });
-      razorpay.on('payment.failed', (response) => { message(response?.error?.description || 'Payment failed. No fulfilment order was created.', 'error'); setBusy(false); });
+      razorpay.on('payment.failed', (response) => { razorpayFailureMessage = response?.error?.description || 'Payment failed. No fulfilment order was created.'; setBusy(false); });
+      close();
       razorpay.open();
     } catch (error) {
-      message(error.message || 'Checkout could not be completed. Please try again.', 'error'); setBusy(false);
+      showCheckout(); message(error.message || 'Checkout could not be completed. Please try again.', 'error'); setBusy(false);
     }
   }
 
