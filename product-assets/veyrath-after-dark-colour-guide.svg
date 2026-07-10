@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#070707"/><stop offset="1" stop-color="#15120e"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-opacity=".48"/></filter>
+    <style>.t{font-family:Arial,Helvetica,sans-serif}.label{font:500 22px Arial,Helvetica,sans-serif;fill:#e9e2d8;letter-spacing:1px}.sw{stroke:#6e6253;stroke-width:2}</style>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg2)"/>
+  <text x="90" y="100" class="t" fill="#d6ad6b" font-size="30" letter-spacing="13">VEYRATH</text>
+  <text x="90" y="178" class="t" fill="#f4f0e8" font-size="64" font-weight="700">AFTER DARK</text>
+  <text x="92" y="226" class="t" fill="#aaa39a" font-size="24" letter-spacing="7">COLOUR EDIT / OVERSIZED T-SHIRT</text>
+  <g transform="translate(90 315)" filter="url(#shadow)">
+    <g transform="translate(0 0)"><rect class="sw" width="205" height="205" rx="28" fill="#111111"/><text x="102" y="244" text-anchor="middle" class="label">INK BLACK</text></g>
+    <g transform="translate(235 0)"><rect class="sw" width="205" height="205" rx="28" fill="#ece8dc"/><text x="102" y="244" text-anchor="middle" class="label">OFF WHITE</text></g>
+    <g transform="translate(470 0)"><rect class="sw" width="205" height="205" rx="28" fill="#bfc4c7"/><text x="102" y="244" text-anchor="middle" class="label">SILVER FROST</text></g>
+    <g transform="translate(705 0)"><rect class="sw" width="205" height="205" rx="28" fill="#666b6d"/><text x="102" y="244" text-anchor="middle" class="label">STEEL GREY</text></g>
+    <g transform="translate(940 0)"><rect class="sw" width="205" height="205" rx="28" fill="#172a45"/><text x="102" y="244" text-anchor="middle" class="label">NAVY BLUE</text></g>
+    <g transform="translate(1175 0)"><rect class="sw" width="205" height="205" rx="28" fill="#2455a4"/><text x="102" y="244" text-anchor="middle" class="label">ROYAL BLUE</text></g>
+    <g transform="translate(0 335)"><rect class="sw" width="205" height="205" rx="28" fill="#183b2a"/><text x="102" y="244" text-anchor="middle" class="label">BOTTLE GREEN</text></g>
+    <g transform="translate(235 335)"><rect class="sw" width="205" height="205" rx="28" fill="#541b2c"/><text x="102" y="244" text-anchor="middle" class="label">OXBLOOD</text></g>
+    <g transform="translate(470 335)"><rect class="sw" width="205" height="205" rx="28" fill="#b62429"/><text x="102" y="244" text-anchor="middle" class="label">RED</text></g>
+    <g transform="translate(705 335)"><rect class="sw" width="205" height="205" rx="28" fill="#b9878c"/><text x="102" y="244" text-anchor="middle" class="label">DUSTY ROSE</text></g>
+    <g transform="translate(940 335)"><rect class="sw" width="205" height="205" rx="28" fill="#8fb7d1"/><text x="102" y="244" text-anchor="middle" class="label">BABY BLUE</text></g>
+    <g transform="translate(1175 335)"><rect class="sw" width="205" height="205" rx="28" fill="#a99aca"/><text x="102" y="244" text-anchor="middle" class="label">IRIS LAVENDER</text></g>
+  </g>
+  <text x="90" y="945" class="t" fill="#aaa39a" font-size="17" letter-spacing="3">COLOURS MAY VARY SLIGHTLY BY SCREEN AND PRINT BATCH</text>
+</svg>

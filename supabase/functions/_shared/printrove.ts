@@ -39,52 +39,11 @@ export async function fetchPrintroveOrder(orderId: string) {
   return responseJson(response);
 }
 
-export async function findPrintroveOrderByReference(referenceNumber: string) {
-  const token = await printroveToken();
-  const url = new URL("https://api.printrove.com/api/external/orders");
-  url.searchParams.set("reference_number", referenceNumber);
-  url.searchParams.set("per_page", "20");
-  const response = await fetch(url, {
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Accept": "application/json" },
-  });
-  const payload = await responseJson(response);
-  const candidates = [
-    ...(Array.isArray(payload) ? payload : []),
-    ...(Array.isArray(payload?.data) ? payload.data : []),
-    ...(Array.isArray(payload?.data?.data) ? payload.data.data : []),
-    ...(Array.isArray(payload?.orders) ? payload.orders : []),
-    ...(Array.isArray(payload?.data?.orders) ? payload.data.orders : []),
-  ];
-  return candidates.find((item: any) => String(item?.reference_number || item?.reference || "").toUpperCase() === referenceNumber.toUpperCase()) || null;
-}
-
-function deepValue(payload: any, keys: string[], depth = 0): unknown {
-  if (!payload || typeof payload !== "object" || depth > 6) return undefined;
-  for (const key of keys) {
-    const value = payload[key];
-    if (value !== undefined && value !== null && value !== "") return value;
-  }
-  for (const value of Object.values(payload)) {
-    if (value && typeof value === "object") {
-      const found = deepValue(value, keys, depth + 1);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
-}
-
 export function printroveOrderId(payload: any) {
-  return payload?.id || payload?.order_id || payload?.data?.id || payload?.data?.order_id || payload?.order?.id || deepValue(payload, ["order_id", "id"]) || null;
+  return payload?.id || payload?.order_id || payload?.data?.id || payload?.data?.order_id || payload?.order?.id || null;
 }
 
 export function printroveOrderStatus(payload: any) {
-  return String(deepValue(payload, ["order_status", "status_name", "current_status", "fulfilment_status", "fulfillment_status", "status"]) || "received");
+  return payload?.status || payload?.data?.status || payload?.order?.status || "created";
 }
 
-export function printroveTracking(payload: any) {
-  return {
-    tracking_number: String(deepValue(payload, ["tracking_number", "tracking_id", "awb", "awb_number"]) || ""),
-    tracking_url: String(deepValue(payload, ["tracking_url", "tracking_link", "track_url"]) || ""),
-    courier_name: String(deepValue(payload, ["courier_name", "courier_company", "shipping_partner", "carrier_name"]) || ""),
-  };
-}

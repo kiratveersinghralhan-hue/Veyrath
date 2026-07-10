@@ -107,9 +107,6 @@ create table public.orders (
   shipping_amount numeric(12,2) not null default 0 check (shipping_amount >= 0),
   total_amount numeric(12,2) not null check (total_amount >= 1),
   amount_paid numeric(12,2) not null default 0 check (amount_paid >= 0),
-  payment_fee numeric(12,2) not null default 0 check (payment_fee >= 0),
-  payment_tax numeric(12,2) not null default 0 check (payment_tax >= 0),
-  estimated_settlement_amount numeric(12,2) not null default 0 check (estimated_settlement_amount >= 0),
   currency text not null default 'INR' check (currency ~ '^[A-Z]{3}$'),
   payment_provider text not null default 'razorpay',
   payment_status text not null default 'pending' check (payment_status in ('pending','paid','failed','refunded','partially_refunded')),
@@ -120,9 +117,6 @@ create table public.orders (
   razorpay_signature text,
   printrove_order_id text unique,
   printrove_status text,
-  courier_name text not null default '',
-  tracking_number text not null default '',
-  tracking_url text not null default '',
   admin_hold boolean not null default false,
   notes text not null default '',
   paid_at timestamptz,
@@ -177,37 +171,6 @@ create table public.site_settings (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
--- Customers can retrieve only their own limited status using two matching
--- factors. Addresses, payment IDs, internal notes and supplier IDs stay private.
-create or replace function public.track_order(p_order_number text, p_contact text)
-returns table (
-  order_number text,
-  payment_status text,
-  order_status text,
-  fulfilment_status text,
-  printrove_status text,
-  courier_name text,
-  tracking_number text,
-  tracking_url text,
-  created_at timestamptz,
-  paid_at timestamptz
-)
-language sql
-security definer
-set search_path = public
-as $$
-  select o.order_number,o.payment_status,o.order_status,o.fulfilment_status,
-         coalesce(o.printrove_status,''),o.courier_name,o.tracking_number,o.tracking_url,
-         o.created_at,o.paid_at
-  from public.orders o
-  where upper(o.order_number)=upper(trim(p_order_number))
-    and (
-      lower(o.customer_email)=lower(trim(p_contact))
-      or o.customer_phone=regexp_replace(p_contact,'[^0-9]','','g')
-    )
-  limit 1;
-$$;
 
 create table public.hero_slides (
   id uuid primary key default gen_random_uuid(), eyebrow text not null default '', heading text not null,
@@ -388,8 +351,6 @@ create view public.admin_products with (security_invoker=true) as
 select p.* from public.products p where public.is_admin();
 
 grant usage on schema public to anon,authenticated;
-revoke all on function public.track_order(text,text) from public;
-grant execute on function public.track_order(text,text) to anon,authenticated;
 grant select(id,slug,name,description,category,gender,price,compare_at_price,selling_price,currency,images,image_url,front_design_url,back_design_url,sizes,colours,tags,style,rating,is_published,is_featured,sort_order,shipping_cost,fulfilment_status,created_at,updated_at) on public.products to anon,authenticated;
 grant select on public.storefront_products,public.site_settings,public.hero_slides to anon,authenticated;
 grant select on public.admin_products to authenticated;
@@ -402,7 +363,7 @@ grant update(admin_hold,notes) on public.orders to authenticated;
 grant all on public.admin_users,public.products,public.customers,public.orders,public.order_items,public.payment_logs,public.printrove_order_logs,public.site_settings,public.hero_slides,public.inquiries,public.newsletter_signups,public.event_logs to service_role;
 
 insert into public.site_settings(key,value,is_public) values
-('commerce','{"auto_send_to_printrove":true,"auto_sync_printrove_on_admin_open":true,"free_shipping_threshold":1999,"default_currency":"INR"}'::jsonb,true),
+('commerce','{"auto_send_to_printrove":false,"free_shipping_threshold":1999,"default_currency":"INR"}'::jsonb,true),
 ('site_data', $json$
 {
   "hero":{"eyebrow":"VEYRATH / BORN AFTER DARK","heading":"Own every. silent. move.","subheading":"Oversized streetwear for the ones who never need to announce themselves.","primary_label":"Shop collection","primary_link":"shop.html","secondary_label":"Join inner circle","secondary_link":"#inner-circle","image_url":"veyrath-hero.jpg"},

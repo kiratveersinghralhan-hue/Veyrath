@@ -2,13 +2,15 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/</loc><priority>1.0</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/shop.html</loc><priority>0.9</priority></url>
+  <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/collections.html</loc><priority>0.85</priority></url>
+  <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/size-charts.html</loc><priority>0.75</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/about.html</loc><priority>0.7</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/support.html</loc><priority>0.6</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/faq.html</loc><priority>0.6</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/contact.html</loc><priority>0.6</priority></url>
-  <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/privacy.html</loc><priority>0.3</priority></url>
-  <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/terms.html</loc><priority>0.3</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/shipping.html</loc><priority>0.4</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/returns.html</loc><priority>0.4</priority></url>
   <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/cancellation.html</loc><priority>0.4</priority></url>
+  <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/privacy.html</loc><priority>0.3</priority></url>
+  <url><loc>https://kiratveersinghralhan-hue.github.io/Veyrath/terms.html</loc><priority>0.3</priority></url>
 </urlset>

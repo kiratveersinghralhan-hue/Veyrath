@@ -13,15 +13,7 @@ Deno.serve(async (req) => {
     const { data: order, error } = await service.from("orders").select("*").eq("id", body.order_id).maybeSingle();
     if (error) throw error;
     if (!order) return failure(req, "Order not found", 404);
-    if (order.payment_status === "paid") {
-      let autoFulfilment: unknown = null;
-      const { data: commerce } = await service.from("site_settings").select("value").eq("key", "commerce").maybeSingle();
-      if (commerce?.value?.auto_send_to_printrove === true) {
-        try { autoFulfilment = await fulfilWithPrintrove(service, order.id); }
-        catch (fulfilmentError) { autoFulfilment = { error: fulfilmentError instanceof Error ? fulfilmentError.message : "Auto-send failed" }; }
-      }
-      return json(req, { success: true, already_verified: true, order_number: order.order_number, payment_status: "paid", auto_fulfilment: autoFulfilment });
-    }
+    if (order.payment_status === "paid") return json(req, { success: true, already_verified: true, order_number: order.order_number });
     if (!order.razorpay_order_id || order.razorpay_order_id !== body.razorpay_order_id) return failure(req, "Razorpay order mismatch", 400);
 
     const secret = Deno.env.get("RAZORPAY_KEY_SECRET") || "";
@@ -45,18 +37,7 @@ Deno.serve(async (req) => {
       return failure(req, "Payment is authenticated but not captured yet. Enable automatic capture or wait for the webhook.", 409);
     }
 
-    const paymentFee = Number(payment.fee || 0) / 100;
-    const paid = await service.from("orders").update({
-      payment_status: "paid",
-      order_status: "paid",
-      razorpay_payment_id: body.razorpay_payment_id,
-      razorpay_signature: body.razorpay_signature,
-      amount_paid: Number(payment.amount) / 100,
-      payment_fee: paymentFee,
-      payment_tax: Number(payment.tax || 0) / 100,
-      estimated_settlement_amount: Math.max(0, (Number(payment.amount) / 100) - paymentFee),
-      paid_at: new Date().toISOString(),
-    }).eq("id", order.id).neq("payment_status", "paid").select("id").maybeSingle();
+    const paid = await service.from("orders").update({ payment_status: "paid", order_status: "paid", razorpay_payment_id: body.razorpay_payment_id, razorpay_signature: body.razorpay_signature, amount_paid: Number(payment.amount) / 100, paid_at: new Date().toISOString() }).eq("id", order.id).neq("payment_status", "paid").select("id").maybeSingle();
     if (paid.error) throw paid.error;
     await service.from("payment_logs").insert({ order_id: order.id, event_type: "payment_verified", status: "paid", raw_payload: payment });
 
@@ -72,3 +53,4 @@ Deno.serve(async (req) => {
     return failure(req, caught instanceof Error ? caught.message : "Could not verify payment", 500);
   }
 });
+
