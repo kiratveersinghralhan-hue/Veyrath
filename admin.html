@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#080808">
   <link rel="icon" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260710-collections-sizecharts">
+  <link rel="stylesheet" href="styles.css?v=20260710-collection-builder">
 </head>
 <body class="admin-body">
   <section class="admin-login" id="adminLogin">
@@ -170,7 +170,21 @@
                 <div class="field field-full"><label>Description</label><textarea name="description"></textarea></div>
                 <div class="field"><label>Cover image URL</label><input name="cover_image_url" placeholder="Optional https://&hellip; or root filename"></div>
                 <div class="field product-gallery-upload"><label>Upload collection cover</label><input name="cover_file" type="file" accept="image/jpeg,image/png,image/webp"><span class="upload-note">Optional. If empty, the first product image becomes the cover.</span></div>
-                <div class="field field-full"><label>Choose products</label><select name="product_ids" id="collectionProductSelect" multiple size="10"></select><span class="upload-note">Use Ctrl/Cmd to select many products. Existing product rows are not moved or deleted.</span></div>
+                <div class="field field-full collection-picker-field">
+                  <label>Choose uploaded products</label>
+                  <input type="hidden" name="product_ids" id="collectionProductIds">
+                  <div class="collection-picker-tools">
+                    <input id="collectionProductSearch" type="search" placeholder="Search sign, colour, SKU, product name">
+                    <select id="collectionProductCategory"><option value="">All categories</option></select>
+                    <div class="button-row">
+                      <button id="collectionSelectVisible" type="button">Select visible</button>
+                      <button id="collectionClearSelection" type="button">Clear selected</button>
+                    </div>
+                  </div>
+                  <div id="collectionSelectedCount" class="collection-selected-count">0 products selected.</div>
+                  <div id="collectionProductPicker" class="collection-product-picker"></div>
+                  <span class="upload-note">Tick existing uploaded products to group them. This does not move/delete products from shop; it only connects them to this collection.</span>
+                </div>
               </div>
               <div class="checkbox-row"><label><input name="is_published" type="checkbox" checked> Published</label><label><input name="is_featured" type="checkbox"> Featured collection</label></div>
               <div class="button-row"><button class="primary" type="submit">Save collection</button><button id="collectionReset" type="button">Clear</button></div>
@@ -234,7 +248,7 @@
   <script src="site-data.js?v=20260710-collections-sizecharts" defer></script>
   <script src="products.js?v=20260702" defer></script>
   <script src="supabase-config.js?v=20260710-force-cefx-project" defer></script>
-  <script src="admin.js?v=20260710-collections-sizecharts" defer></script>
+  <script src="admin.js?v=20260710-collection-builder" defer></script>
 </body>
 </html>
 

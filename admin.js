@@ -43,6 +43,9 @@
   let collectionProducts = [];
   let siteData = clone(window.VEYRATH_SITE_DATA || {});
   let featureSchemaReady = true;
+  let collectionSelection = new Set();
+  let collectionPickerSearch = '';
+  let collectionPickerCategory = '';
 
   function message(form, text) {
     const node = $('.form-message', form);
@@ -608,8 +611,81 @@
     select.innerHTML = products.map((product) => `<option value="${esc(product.id)}" ${selectedSet.has(String(product.id)) ? 'selected' : ''}>${esc(product.name)} — ${esc(product.category || 'Product')}</option>`).join('') || '<option disabled>No products available yet</option>';
   }
 
+  function productPickerText(product) {
+    return [
+      product.name,
+      product.slug,
+      product.category,
+      product.gender,
+      product.printrove_sku,
+      product.printrove_product_type,
+      ...split(product.colours),
+      ...split(product.sizes),
+      ...split(product.tags),
+      ...split(product.style)
+    ].join(' ').toLowerCase();
+  }
+
+  function visiblePickerProducts() {
+    const search = collectionPickerSearch.trim().toLowerCase();
+    return products
+      .filter((product) => !collectionPickerCategory || product.category === collectionPickerCategory)
+      .filter((product) => !search || productPickerText(product).includes(search))
+      .sort((a, b) => {
+        const aSelected = collectionSelection.has(String(a.id)) ? 1 : 0;
+        const bSelected = collectionSelection.has(String(b.id)) ? 1 : 0;
+        return bSelected - aSelected || String(a.name || '').localeCompare(String(b.name || ''));
+      });
+  }
+
+  function syncCollectionSelection() {
+    const hidden = $('#collectionProductIds');
+    if (hidden) hidden.value = [...collectionSelection].join(',');
+    const count = $('#collectionSelectedCount');
+    if (count) count.textContent = `${collectionSelection.size} product${collectionSelection.size === 1 ? '' : 's'} selected.`;
+  }
+
+  function fillCollectionCategoryFilter() {
+    const select = $('#collectionProductCategory');
+    if (!select) return;
+    const previous = select.value;
+    const categories = [...new Set(products.map((product) => product.category).filter(Boolean))].sort();
+    select.innerHTML = '<option value="">All categories</option>' + categories.map((category) => `<option value="${esc(category)}">${esc(category)}</option>`).join('');
+    select.value = categories.includes(previous) ? previous : '';
+    collectionPickerCategory = select.value;
+  }
+
+  function renderCollectionProductPicker(selected) {
+    const picker = $('#collectionProductPicker');
+    if (!picker) return;
+    if (Array.isArray(selected)) collectionSelection = new Set(selected.map(String));
+    fillCollectionCategoryFilter();
+    const visible = visiblePickerProducts();
+    picker.innerHTML = visible.length ? visible.map((product) => {
+      const image = galleryOf(product)[0] || product.image_url || product.front_design_url || 'veyrath-tee.jpg';
+      const checked = collectionSelection.has(String(product.id)) ? 'checked' : '';
+      const details = [
+        split(product.colours).slice(0, 3).join(', '),
+        split(product.sizes).slice(0, 5).join('/'),
+        product.printrove_sku ? `SKU ${product.printrove_sku}` : ''
+      ].filter(Boolean).join(' · ');
+      const linked = collectionProducts.filter((item) => String(item.product_id) === String(product.id)).length;
+      return `
+        <label class="collection-product-choice ${checked ? 'is-selected' : ''}">
+          <input type="checkbox" value="${esc(product.id)}" ${checked} data-collection-product-choice>
+          <img src="${esc(image)}" alt="">
+          <span>
+            <strong>${esc(product.name)}</strong>
+            <small>${esc(product.category || 'Product')} · ${product.is_published ? 'Published' : 'Draft'}${linked ? ` · in ${linked} collection${linked === 1 ? '' : 's'}` : ''}</small>
+            <em>${esc(details || 'No colour/size metadata yet')}</em>
+          </span>
+        </label>`;
+    }).join('') : '<p class="collection-picker-empty">No products match this search. Clear the filter or upload products first.</p>';
+    syncCollectionSelection();
+  }
+
   function renderCollections() {
-    renderProductPicker();
+    renderCollectionProductPicker();
     $('#collectionsTable').innerHTML = collections.map((collection) => {
       const ids = selectedProductIds(collection.id);
       const firstProduct = products.find((product) => ids.includes(String(product.id)));
@@ -626,7 +702,10 @@
     form.elements.is_published.checked = true;
     form.elements.is_featured.checked = false;
     $('#collectionFormTitle').textContent = 'Create collection';
-    renderProductPicker();
+    collectionPickerSearch = '';
+    collectionPickerCategory = '';
+    $('#collectionProductSearch').value = '';
+    renderCollectionProductPicker([]);
     message(form, '');
   }
 
@@ -640,7 +719,10 @@
       if (field.type === 'checkbox') field.checked = Boolean(value);
       else field.value = value ?? '';
     });
-    renderProductPicker(selectedProductIds(collectionId));
+    collectionPickerSearch = '';
+    collectionPickerCategory = '';
+    $('#collectionProductSearch').value = '';
+    renderCollectionProductPicker(selectedProductIds(collectionId));
     $('#collectionFormTitle').textContent = `Edit ${collection.title}`;
     activate('collections');
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -652,7 +734,7 @@
     const values = Object.fromEntries(new FormData(form));
     const collectionId = values.id || uuid();
     const slug = values.slug.trim() || slugify(values.title);
-    const selectedIds = [...form.elements.product_ids.selectedOptions].map((option) => option.value);
+    const selectedIds = [...collectionSelection];
     message(form, 'Saving collection…');
     try {
       const uploadedCover = await uploadSingleImage(form.elements.cover_file.files[0], 'collections', collectionId, slug, form, 'collection cover');
@@ -679,7 +761,7 @@
       }
       resetCollection();
       await loadAll();
-      message(form, 'Collection saved.');
+      message(form, `Collection saved with ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'}.`);
     } catch (error) {
       message(form, error.message);
     }
@@ -909,6 +991,30 @@
     $('#collectionForm').addEventListener('submit', submitCollection);
     $('#collectionReset').addEventListener('click', resetCollection);
     $('#collectionsTable').addEventListener('click', collectionAction);
+    $('#collectionProductSearch').addEventListener('input', (event) => {
+      collectionPickerSearch = event.currentTarget.value;
+      renderCollectionProductPicker();
+    });
+    $('#collectionProductCategory').addEventListener('change', (event) => {
+      collectionPickerCategory = event.currentTarget.value;
+      renderCollectionProductPicker();
+    });
+    $('#collectionProductPicker').addEventListener('change', (event) => {
+      const checkbox = event.target.closest('[data-collection-product-choice]');
+      if (!checkbox) return;
+      if (checkbox.checked) collectionSelection.add(String(checkbox.value));
+      else collectionSelection.delete(String(checkbox.value));
+      checkbox.closest('.collection-product-choice')?.classList.toggle('is-selected', checkbox.checked);
+      syncCollectionSelection();
+    });
+    $('#collectionSelectVisible').addEventListener('click', () => {
+      visiblePickerProducts().forEach((product) => collectionSelection.add(String(product.id)));
+      renderCollectionProductPicker();
+    });
+    $('#collectionClearSelection').addEventListener('click', () => {
+      collectionSelection.clear();
+      renderCollectionProductPicker();
+    });
 
     $('#sizeChartForm').addEventListener('submit', submitSizeChart);
     $('#sizeChartReset').addEventListener('click', resetSizeChart);
