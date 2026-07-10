@@ -6,6 +6,12 @@ begin;
 
 create extension if not exists pgcrypto;
 
+-- Views do not store product/order data. Dropping them first avoids Postgres
+-- "cannot change name of view column" errors when older deployments have a
+-- different storefront_products column order.
+drop view if exists public.storefront_products;
+drop view if exists public.admin_products;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
