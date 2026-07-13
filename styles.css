@@ -111,12 +111,12 @@ body.checkout-open{overflow:hidden}.product-actions button:last-child{margin-lef
 /* Mobile layout and sidebar hotfix */
 @media(max-width:980px){
   .site-header{isolation:isolate}
-  .site-nav{top:0!important;right:0!important;bottom:0!important;left:auto!important;width:min(84vw,380px)!important;height:100dvh;max-height:100dvh;justify-content:flex-start!important;gap:.45rem!important;overflow-y:auto;overscroll-behavior:contain;padding:calc(5.4rem + env(safe-area-inset-top)) clamp(1.1rem,6vw,2rem) max(1.25rem,env(safe-area-inset-bottom))!important;clip-path:none!important;transform:translateX(100%);opacity:0;visibility:hidden;pointer-events:none;transition:transform .55s var(--ease),opacity .35s,visibility .35s;font-size:clamp(1.45rem,8.4vw,2.45rem)!important;line-height:1.02}
+  .site-nav{top:0!important;right:0!important;bottom:0!important;left:auto!important;width:min(84vw,380px)!important;height:100dvh;max-height:100dvh;justify-content:flex-start!important;gap:.5rem!important;overflow-y:auto;overscroll-behavior:contain;padding:calc(5.4rem + env(safe-area-inset-top)) clamp(1.1rem,6vw,2rem) max(1.25rem,env(safe-area-inset-bottom))!important;clip-path:none!important;transform:translateX(100%);opacity:0;visibility:hidden;pointer-events:none;transition:transform .55s var(--ease),opacity .35s,visibility .35s;font-size:clamp(1.75rem,9vw,2.85rem)!important;line-height:1.04}
   .site-nav.is-open{transform:translateX(0);opacity:1;visibility:visible;pointer-events:auto}
-  .site-nav>a{display:flex;align-items:center;width:100%;min-height:44px;padding:.36rem 0!important}
+  .site-nav>a{display:flex;align-items:center;width:100%;min-height:44px;padding:.36rem 0!important;font-size:inherit!important}
   .site-nav .nav-kicker{top:max(1.15rem,env(safe-area-inset-top));left:clamp(1.1rem,6vw,2rem)}
   .site-nav>small{position:static;margin-top:auto;padding-top:1rem}
-  .site-nav .nav-accent{width:auto;min-height:44px;margin-top:.75rem;padding:.75rem 1rem!important;font-size:.62rem!important;line-height:1.1}
+  .site-nav .nav-accent{width:auto;min-height:46px;margin-top:.75rem;padding:.82rem 1.05rem!important;font-size:.7rem!important;line-height:1.1}
   .menu-button{flex:0 0 46px}
   .brand{min-width:0}
 }
@@ -129,7 +129,7 @@ body.checkout-open{overflow:hidden}.product-actions button:last-child{margin-lef
   .admin-nav{position:sticky;top:58px;z-index:45;display:flex;flex-direction:row;gap:.45rem;width:100%;max-width:100vw;height:auto;padding:.55rem .75rem;border-right:0;border-bottom:1px solid rgba(241,234,223,.1);overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;scroll-padding-inline:.75rem;-webkit-overflow-scrolling:touch;background:rgba(8,8,8,.95);backdrop-filter:blur(16px)}
   .admin-nav::-webkit-scrollbar{display:none}
   .admin-nav::before{display:none}
-  .admin-nav button{flex:0 0 auto;min-height:36px;padding:.55rem .72rem;border:1px solid rgba(241,234,223,.1);border-radius:999px;background:rgba(255,255,255,.025);font-size:.59rem;line-height:1;white-space:nowrap;scroll-snap-align:start}
+  .admin-nav button{flex:0 0 auto;min-height:42px;padding:.68rem .92rem;border:1px solid rgba(241,234,223,.1);border-radius:999px;background:rgba(255,255,255,.025);font-size:.72rem;line-height:1;letter-spacing:.035em;white-space:nowrap;scroll-snap-align:start}
   .admin-nav button::before{display:none}
   .admin-nav button.is-active,.admin-nav button:hover{border-color:rgba(181,154,98,.55);background:rgba(181,154,98,.15);box-shadow:0 0 0 1px rgba(181,154,98,.08) inset;transform:none}
   .admin-main{padding:.9rem .75rem 1.5rem;overflow:hidden}
@@ -158,7 +158,7 @@ body.checkout-open{overflow:hidden}.product-actions button:last-child{margin-lef
 }
 @media(max-width:520px){
   .announcement{height:auto;min-height:32px;padding:.45rem .65rem;text-align:center;line-height:1.3}
-  .site-nav{width:min(92vw,360px)!important;padding-left:1.15rem!important;padding-right:1.15rem!important;font-size:clamp(1.35rem,9vw,2rem)!important}
+  .site-nav{width:min(92vw,360px)!important;padding-left:1.15rem!important;padding-right:1.15rem!important;font-size:clamp(1.62rem,10vw,2.32rem)!important}
   .brand{width:126px}
   .brand img{width:112px}
   .brand span{font-size:.46rem;letter-spacing:.18em}
