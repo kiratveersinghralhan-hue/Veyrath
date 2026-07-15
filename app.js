@@ -618,6 +618,8 @@
     host.innerHTML = activeCollections.length ? activeCollections.map((collection) => {
       const items = productsForCollection(collection.id);
       const cover = safeImage(collection.cover_image_url) || productImages(items[0] || {})[0] || 'veyrath-tee.jpg';
+      const firstItem = items[0];
+      const collectionKey = collection.slug || collection.id;
       return `
         <article class="collection-drop reveal" id="${esc(collection.slug || collection.id)}">
           <div class="collection-drop-hero">
@@ -626,15 +628,43 @@
               <p class="eyebrow">${esc(collection.drop_label || 'VEYRATH collection')}</p>
               <h2>${esc(collection.title)}</h2>
               <p>${esc(collection.subtitle || collection.description || 'A connected set of VEYRATH pieces designed around one signal.')}</p>
-              <a class="btn btn-ghost" href="shop.html?collection=${encodeURIComponent(collection.slug || collection.id)}">Shop this collection</a>
+              <span class="collection-piece-count">${items.length ? `${items.length} piece${items.length === 1 ? '' : 's'} inside` : 'Drop being arranged'}</span>
+              ${items.length ? `
+                <div class="collection-piece-picker">
+                  <label>
+                    <span>Choose from this collection</span>
+                    <select data-collection-piece-select>
+                      ${items.map((item) => {
+                        const meta = [split(item.colours)[0], split(item.sizes).slice(0, 3).join('/')].filter(Boolean).join(' · ');
+                        return `<option value="${esc(item.id)}">${esc(item.name)}${meta ? ` — ${esc(meta)}` : ''}</option>`;
+                      }).join('')}
+                    </select>
+                  </label>
+                  <div class="collection-piece-actions">
+                    <button class="btn btn-gold" type="button" data-collection-open-piece="${esc(firstItem.id)}">View selected piece</button>
+                    <a class="btn btn-ghost" href="shop.html?collection=${encodeURIComponent(collectionKey)}">Shop all pieces</a>
+                  </div>
+                  <small>Use the dropdown to view one shirt at a time. All variants stay available in Shop.</small>
+                </div>` : `
+                <p class="collection-empty-note">Products will enter this collection soon. Add pieces from the admin panel.</p>
+                <a class="btn btn-ghost" href="shop.html?collection=${encodeURIComponent(collectionKey)}">Visit shop</a>`}
             </div>
-          </div>
-          <div class="collection-products product-grid">
-            ${items.length ? items.map(productCard).join('') : emptyState('Products will enter this collection soon.', 'Add products to this collection from the admin panel.')}
           </div>
         </article>`;
     }).join('') : emptyState('Collections are being arranged.', 'Create astrology, essentials or drop-based collections from the admin panel.');
-    bindProducts(products());
+    $$('[data-collection-piece-select]', host).forEach((select) => {
+      select.addEventListener('change', () => {
+        const wrapper = select.closest('.collection-piece-picker');
+        const button = $('[data-collection-open-piece]', wrapper);
+        if (button) button.dataset.collectionOpenPiece = select.value;
+      });
+    });
+    $$('[data-collection-open-piece]', host).forEach((button) => {
+      button.addEventListener('click', () => {
+        const product = products().find((item) => String(item.id) === String(button.dataset.collectionOpenPiece));
+        openProduct(product);
+      });
+    });
   }
 
   function forms() {
