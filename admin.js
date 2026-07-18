@@ -419,7 +419,9 @@
     $('#ordersTable').innerHTML = visible.map((order) => {
       const items = (order.order_items || []).map((item) => `${item.quantity}× ${esc(item.product_name)} <small>${esc(item.colour)} / ${esc(item.size)}</small>`).join('<br>');
       const canSend = order.payment_status === 'paid' && !order.admin_hold && ['not_sent', 'printrove_failed'].includes(order.fulfilment_status);
-      return `<tr><td><strong>${esc(order.order_number)}</strong><br><small>${new Date(order.created_at).toLocaleString('en-IN')}</small></td><td><strong>${esc(order.customer_name)}</strong><br><small>${esc(order.customer_phone)} · ${esc(order.customer_email)}</small><br><small>${esc([order.address_line1, order.address_line2, order.city, order.state, order.pincode].filter(Boolean).join(', '))}</small></td><td>${items || 'No items'}</td><td><span class="status-pill status-${esc(order.payment_status)}">${esc(order.payment_status)}</span>${order.razorpay_payment_id ? `<br><small>${esc(order.razorpay_payment_id)}</small>` : ''}</td><td><span class="status-pill status-${esc(order.fulfilment_status)}">${esc(order.fulfilment_status)}</span>${order.printrove_order_id ? `<br><small>ID ${esc(order.printrove_order_id)} · ${esc(order.printrove_status || '')}</small>` : ''}${order.admin_hold ? '<br><span class="hold-note">Manual hold</span>' : ''}</td><td><strong>${money(order.total_amount)}</strong><br><small>Shipping ${money(order.shipping_amount)}</small></td><td><div class="order-actions">${canSend ? `<button class="primary" type="button" data-send-printrove="${order.id}">${order.fulfilment_status === 'printrove_failed' ? 'Retry Printrove' : 'Send to Printrove'}</button>` : ''}${order.printrove_order_id ? `<button type="button" data-sync-printrove="${order.id}">Sync status</button>` : ''}<button type="button" data-toggle-hold="${order.id}">${order.admin_hold ? 'Release hold' : 'Mark issue / hold'}</button></div></td></tr>`;
+      const trackingDetails = order.tracking_number ? `<br><small>${esc(order.courier_name || 'Courier')}: ${esc(order.tracking_number)}</small>` : '';
+      const trackingButton = order.payment_status === 'paid' ? `<button type="button" data-edit-tracking="${order.id}">Update tracking</button>` : '';
+      return `<tr><td><strong>${esc(order.order_number)}</strong><br><small>${new Date(order.created_at).toLocaleString('en-IN')}</small></td><td><strong>${esc(order.customer_name)}</strong><br><small>${esc(order.customer_phone)} · ${esc(order.customer_email)}</small><br><small>${esc([order.address_line1, order.address_line2, order.city, order.state, order.pincode].filter(Boolean).join(', '))}</small></td><td>${items || 'No items'}</td><td><span class="status-pill status-${esc(order.payment_status)}">${esc(order.payment_status)}</span>${order.razorpay_payment_id ? `<br><small>${esc(order.razorpay_payment_id)}</small>` : ''}</td><td><span class="status-pill status-${esc(order.fulfilment_status)}">${esc(order.fulfilment_status)}</span>${order.printrove_order_id ? `<br><small>ID ${esc(order.printrove_order_id)} · ${esc(order.printrove_status || '')}</small>` : ''}${trackingDetails}${order.admin_hold ? '<br><span class="hold-note">Manual hold</span>' : ''}</td><td><strong>${money(order.total_amount)}</strong><br><small>Shipping ${money(order.shipping_amount)}</small></td><td><div class="order-actions">${canSend ? `<button class="primary" type="button" data-send-printrove="${order.id}">${order.fulfilment_status === 'printrove_failed' ? 'Retry Printrove' : 'Send to Printrove'}</button>` : ''}${order.printrove_order_id ? `<button type="button" data-sync-printrove="${order.id}">Sync status</button>` : ''}${trackingButton}<button type="button" data-toggle-hold="${order.id}">${order.admin_hold ? 'Release hold' : 'Mark issue / hold'}</button></div></td></tr>`;
     }).join('') || '<tr><td colspan="7">No orders match this filter.</td></tr>';
   }
 
@@ -444,7 +446,8 @@
     const send = event.target.closest('[data-send-printrove]');
     const sync = event.target.closest('[data-sync-printrove]');
     const hold = event.target.closest('[data-toggle-hold]');
-    if (!send && !sync && !hold) return;
+    const tracking = event.target.closest('[data-edit-tracking]');
+    if (!send && !sync && !hold && !tracking) return;
     try {
       if (send) {
         const order = orders.find((item) => item.id === send.dataset.sendPrintrove);
@@ -467,6 +470,30 @@
         if (error) throw error;
         await loadAll();
         status(order.admin_hold ? 'Manual hold released.' : 'Order placed on manual hold.', 'success');
+      }
+      if (tracking) {
+        const order = orders.find((item) => item.id === tracking.dataset.editTracking);
+        const courier = prompt('Courier name (optional):', order?.courier_name || '');
+        if (courier === null) return;
+        const trackingNumber = prompt('Tracking / AWB number (optional):', order?.tracking_number || '');
+        if (trackingNumber === null) return;
+        const trackingUrl = prompt('Tracking link (optional, https:// only):', order?.tracking_url || '');
+        if (trackingUrl === null) return;
+        if (trackingUrl && !/^https:\/\//i.test(trackingUrl.trim())) throw new Error('Tracking link must begin with https://');
+        const { error } = await client.from('orders').update({
+          courier_name: courier.trim() || null,
+          tracking_number: trackingNumber.trim() || null,
+          tracking_url: trackingUrl.trim() || null,
+          dispatched_at: (trackingNumber.trim() || trackingUrl.trim()) ? (order?.dispatched_at || new Date().toISOString()) : null,
+          order_status: (trackingNumber.trim() || trackingUrl.trim()) ? 'processing' : order?.order_status
+        }).eq('id', order.id);
+        if (error) throw error;
+        await loadAll();
+        if (trackingNumber.trim() || trackingUrl.trim()) {
+          const { data: notification, error: notificationError } = await client.functions.invoke('notify-order-tracking', { body: { order_id: order.id } });
+          if (notificationError || !notification?.success) status('Tracking saved. Deploy the notification function and configure email to send the customer update.', 'notice');
+          else status(notification.email?.sent ? 'Tracking saved and customer email sent.' : 'Tracking saved. Customer tracking is live.', 'success');
+        } else status('Tracking details saved. The customer can now use Track order.', 'success');
       }
     } catch (error) {
       status(error.message, 'error');

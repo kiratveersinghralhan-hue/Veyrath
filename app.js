@@ -46,6 +46,7 @@
   ].map(safeImage).filter(Boolean))];
   const productPrice = (product = {}) => Number(product.sale_price || product.selling_price || product.price || 0);
   const slugText = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const MAX_MODAL_GALLERY_IMAGES = 8;
 
   let remoteProducts = null;
   let remoteSite = null;
@@ -184,7 +185,6 @@
           <a ${page === 'size-charts' ? 'aria-current="page"' : ''} href="size-charts.html">Size guide</a>
           <a ${page === 'about' ? 'aria-current="page"' : ''} href="about.html">Our story</a>
           <a ${page === 'support' ? 'aria-current="page"' : ''} href="support.html">Support</a>
-          <a href="admin.html">Admin</a>
           <a class="nav-accent" href="shop.html">Enter the drop <span>↗</span></a>
           <small>Born After Dark / India</small>
         </nav>
@@ -330,10 +330,12 @@
   function openProduct(product) {
     if (!product) return;
     const modal = $('#productModal');
-    const gallery = productImages(product);
+    const allGallery = productImages(product);
+    const gallery = allGallery.slice(0, MAX_MODAL_GALLERY_IMAGES);
     if (!gallery.length) gallery.push('veyrath-tee.jpg');
     const galleryMarkup = gallery.map((image, index) => `<img src="${esc(image)}" alt="${esc(product.name)} gallery image ${index + 1}" ${index ? 'loading="lazy"' : ''}>`).join('');
     const price = productPrice(product);
+    const madeLabel = product.fulfilment_status === 'paused' ? 'Temporarily unavailable' : 'Made after order in India';
 
     $('#productModalBody').innerHTML = `
       <div class="modal-grid">
@@ -349,16 +351,23 @@
           <dl>
             <div><dt>Sizes</dt><dd>${esc(split(product.sizes).join(' / ') || 'One size')}</dd></div>
             <div><dt>Colours</dt><dd>${esc(split(product.colours).join(' / ') || 'As shown')}</dd></div>
-            <div><dt>Made</dt><dd>${esc(product.fulfilment_status || 'After order')}</dd></div>
+            <div><dt>Made</dt><dd>${esc(madeLabel)}</dd></div>
           </dl>
           ${collectionSwitcher(product)}
           <div class="modal-actions">
             <button class="btn btn-gold" type="button" data-buy-now="${esc(product.id)}">Buy securely</button>
             <a class="btn btn-ghost" href="size-charts.html">Size guide</a>
           </div>
-          <small>Payment protected by Razorpay.</small>
+          <small>${allGallery.length > MAX_MODAL_GALLERY_IMAGES ? `Showing the ${MAX_MODAL_GALLERY_IMAGES} key views for a faster, calmer gallery. ` : ''}Payment protected by Razorpay.</small>
         </div>
       </div>`;
+
+    window.VeyrathAnalytics?.track?.('view_item', {
+      item_id: String(product.id),
+      item_name: product.name,
+      value: price,
+      currency: 'INR'
+    });
 
     const track = $('[data-modal-track]', modal);
     const counter = $('[data-gallery-current]', modal);
@@ -387,7 +396,7 @@
     if (!modal.open) modal.showModal();
   }
 
-  function home() {
+  function home({ loading = false } = {}) {
     const data = site();
     const hero = data.hero || {};
     const heroEl = $('.hero');
@@ -428,9 +437,11 @@
       .slice(0, 12);
     const homeGrid = $('[data-featured-products]');
     homeGrid?.classList.add('home-product-grid');
-    homeGrid.innerHTML = featured.length ? featured.map(productCard).join('') : emptyState();
-    bindProducts(featured);
-    setupCarousel(data.banners || []);
+    homeGrid.innerHTML = loading ? productSkeletons(4) : (featured.length ? featured.map(productCard).join('') : emptyState());
+    if (!loading) {
+      bindProducts(featured);
+      setupCarousel(data.banners || []);
+    }
   }
 
   function setupCarousel(banners) {
@@ -508,10 +519,49 @@
     values.forEach((value) => element.insertAdjacentHTML('beforeend', `<option value="${esc(value)}">${esc(value)}</option>`));
   }
 
+  function productSkeletons(count = 8) {
+    return Array.from({ length: count }, () => '<article class="product-skeleton" aria-hidden="true"><span></span><i></i><i></i><b></b></article>').join('');
+  }
+
+  function collectionSkeletons() {
+    return Array.from({ length: 2 }, () => '<article class="collection-skeleton" aria-hidden="true"><span></span><div><i></i><b></b><em></em><em></em></div></article>').join('');
+  }
+
+  function sizeChartSkeletons() {
+    return Array.from({ length: 2 }, () => '<article class="size-chart-skeleton" aria-hidden="true"><div><i></i><b></b><em></em><em></em></div><span></span></article>').join('');
+  }
+
+  function showLoadingState(page) {
+    document.body.classList.add('storefront-loading');
+    if (page === 'home') {
+      home({ loading: true });
+      return;
+    }
+    if (page === 'shop') {
+      $('#resultCount').textContent = 'Curating the drop…';
+      $('#productGrid').innerHTML = productSkeletons(8);
+      $$('#catalogueFilters input, #catalogueFilters select, #catalogueFilters button').forEach((control) => { control.disabled = true; });
+      return;
+    }
+    if (page === 'collections') {
+      $('[data-collection-nav]')?.replaceChildren();
+      const host = $('[data-collections]');
+      if (host) host.innerHTML = collectionSkeletons();
+      return;
+    }
+    if (page === 'size-charts') {
+      const facts = $('[data-size-chart-facts]');
+      if (facts) facts.innerHTML = '<div class="fit-facts-loading"><span></span><span></span><span></span></div>';
+      const host = $('[data-size-charts]');
+      if (host) host.innerHTML = sizeChartSkeletons();
+    }
+  }
+
   function shop() {
     const all = products();
     const form = $('#catalogueFilters');
     const grid = $('#productGrid');
+    $$('#catalogueFilters input, #catalogueFilters select, #catalogueFilters button').forEach((control) => { control.disabled = false; });
     fillSelect('#filterCategory', optionValues(all, 'category'));
     fillSelect('#filterGender', optionValues(all, 'gender'));
     fillSelect('#filterSize', optionValues(all, 'sizes'));
@@ -604,7 +654,7 @@
             ${safeImage(chart.image_url) ? `<img src="${esc(safeImage(chart.image_url))}" alt="${esc(chart.image_alt || chart.title || 'VEYRATH size chart')}" loading="${index ? 'lazy' : 'eager'}">` : '<div class="chart-placeholder"><span>VEYRATH</span><strong>Chart coming soon</strong></div>'}
           </div>
         </article>`;
-    }).join('') : emptyState('Size charts are being polished.', 'Upload oversized T-shirt, polo, lower and future fit charts from the admin panel.');
+    }).join('') : emptyState('The fit library is being prepared.', 'Check back shortly for the exact measurements for every VEYRATH silhouette.');
   }
 
   function collectionsPage() {
@@ -646,12 +696,12 @@
                   </div>
                   <small>Use the dropdown to view one shirt at a time. All variants stay available in Shop.</small>
                 </div>` : `
-                <p class="collection-empty-note">Products will enter this collection soon. Add pieces from the admin panel.</p>
+                <p class="collection-empty-note">This drop is being prepared. More pieces will enter the collection soon.</p>
                 <a class="btn btn-ghost" href="shop.html?collection=${encodeURIComponent(collectionKey)}">Visit shop</a>`}
             </div>
           </div>
         </article>`;
-    }).join('') : emptyState('Collections are being arranged.', 'Create astrology, essentials or drop-based collections from the admin panel.');
+    }).join('') : emptyState('The next collection is taking shape.', 'Join the Inner Circle to be first inside the next VEYRATH drop.');
     $$('[data-collection-piece-select]', host).forEach((select) => {
       select.addEventListener('change', () => {
         const wrapper = select.closest('.collection-piece-picker');
@@ -684,11 +734,52 @@
         }
         form.reset();
         $('.form-message', form).textContent = 'You are inside the circle.';
+        window.VeyrathAnalytics?.track?.('generate_lead', { source: location.pathname || 'website' });
         toast('Welcome to the Inner Circle.');
       } catch (_) {
         $('.form-message', form).textContent = 'Could not join right now. Please try again.';
       }
     }));
+
+    $('#trackOrderForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const result = $('#trackOrderResult');
+      const submit = $('button[type="submit"]', form);
+      const orderNumber = String(form.elements.order_number.value || '').trim().toUpperCase();
+      const email = String(form.elements.email.value || '').trim().toLowerCase();
+      if (!orderNumber || !email) return;
+      if (!supabaseClient) {
+        result.textContent = 'Order tracking is temporarily unavailable. Please contact support.';
+        result.dataset.tone = 'error';
+        return;
+      }
+      submit.disabled = true;
+      result.textContent = 'Finding your signal…';
+      result.dataset.tone = 'loading';
+      try {
+        const { data, error } = await supabaseClient.rpc('track_order', { p_order_number: orderNumber, p_email: email });
+        if (error) throw error;
+        if (!data?.found) throw new Error('We could not match that order number and email. Check your confirmation email and try again.');
+        const stages = {
+          pending_payment: 'Payment pending',
+          paid: 'Payment confirmed',
+          processing: 'In production',
+          fulfilled: 'Delivered',
+          cancelled: 'Cancelled'
+        };
+        const current = stages[data.order_status] || data.display_status || 'Order received';
+        const tracking = data.tracking_url ? `<a href="${esc(safeLink(data.tracking_url))}" target="_blank" rel="noopener">Track shipment ↗</a>` : (data.tracking_number ? `<span>${esc(data.courier_name || 'Courier')} · ${esc(data.tracking_number)}</span>` : '<span>Tracking appears once your order is dispatched.</span>');
+        result.innerHTML = `<strong>${esc(data.order_number)} · ${esc(current)}</strong><small>${esc(data.display_status || 'Your VEYRATH order is moving through the next stage.')}</small>${tracking}`;
+        result.dataset.tone = 'success';
+        window.VeyrathAnalytics?.track?.('track_order', { order_number: data.order_number });
+      } catch (error) {
+        result.textContent = error.message || 'We could not find that order right now.';
+        result.dataset.tone = 'error';
+      } finally {
+        submit.disabled = false;
+      }
+    });
 
     $('#contactForm')?.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -788,15 +879,17 @@
   async function init() {
     intro();
     chrome();
-    await connectRemote();
     const page = document.body.dataset.page;
+    schema();
+    forms();
+    showLoadingState(page);
+    await connectRemote();
     if (page === 'home') home();
     if (page === 'shop') shop();
     if (page === 'size-charts') sizeChartsPage();
     if (page === 'collections') collectionsPage();
-    forms();
+    document.body.classList.remove('storefront-loading');
     reveal();
-    schema();
     $('.modal-close')?.addEventListener('click', () => $('#productModal').close());
     $('#productModal')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget) event.currentTarget.close();

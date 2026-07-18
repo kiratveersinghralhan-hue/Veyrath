@@ -2,6 +2,7 @@ import { serviceClient } from "../_shared/auth.ts";
 import { corsHeaders, failure, hmacHex, isUuid, json, parseJson, timingSafeEqual } from "../_shared/http.ts";
 import { fetchRazorpayPayment } from "../_shared/razorpay.ts";
 import { fulfilWithPrintrove } from "../_shared/fulfilment.ts";
+import { sendOrderEmail } from "../_shared/email.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
@@ -40,6 +41,8 @@ Deno.serve(async (req) => {
     const paid = await service.from("orders").update({ payment_status: "paid", order_status: "paid", razorpay_payment_id: body.razorpay_payment_id, razorpay_signature: body.razorpay_signature, amount_paid: Number(payment.amount) / 100, paid_at: new Date().toISOString() }).eq("id", order.id).neq("payment_status", "paid").select("id").maybeSingle();
     if (paid.error) throw paid.error;
     await service.from("payment_logs").insert({ order_id: order.id, event_type: "payment_verified", status: "paid", raw_payload: payment });
+    await service.rpc("redeem_coupon_for_paid_order", { p_order_id: order.id });
+    await sendOrderEmail(service, { ...order, payment_status: "paid" }, "payment_confirmed");
 
     let autoFulfilment: unknown = null;
     const { data: commerce } = await service.from("site_settings").select("value").eq("key", "commerce").maybeSingle();
@@ -53,4 +56,3 @@ Deno.serve(async (req) => {
     return failure(req, caught instanceof Error ? caught.message : "Could not verify payment", 500);
   }
 });
-

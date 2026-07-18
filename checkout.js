@@ -5,7 +5,7 @@
   const money = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v) || 0);
   const split = (value) => Array.isArray(value) ? value : String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
   const cfg = window.VEYRATH_SUPABASE || {};
-  let client = null; let activeProduct = null; let freeShippingThreshold = 1999;
+  let client = null; let activeProduct = null; let freeShippingThreshold = 1999; let activeCoupon = null;
 
   function configured() { return /^https:\/\//.test(cfg.url || '') && cfg.anonKey && !cfg.anonKey.includes('YOUR_'); }
   function message(text, tone = '') { const node = $('#checkoutMessage'); if (!node) return; node.textContent = text; node.dataset.tone = tone; }
@@ -16,13 +16,86 @@
     if (!activeProduct) return;
     const subtotal = productPrice(activeProduct) * selectedQuantity();
     const shipping = subtotal >= freeShippingThreshold ? 0 : Number(activeProduct.shipping_cost || 0);
+    const discount = couponDiscount(subtotal);
     $('#checkoutSubtotal').textContent = money(subtotal);
     $('#checkoutShipping').textContent = shipping ? money(shipping) : 'Free';
-    $('#checkoutTotal').textContent = money(subtotal + shipping);
+    const discountRow = $('#checkoutDiscountRow');
+    if (discountRow) {
+      discountRow.hidden = !discount;
+      $('#checkoutDiscount').textContent = `−${money(discount)}`;
+    }
+    $('#checkoutTotal').textContent = money(Math.max(0, subtotal + shipping - discount));
+  }
+
+  function couponDiscount(subtotal) {
+    if (!activeCoupon) return 0;
+    const value = Number(activeCoupon.discount_value || 0);
+    const calculated = activeCoupon.discount_type === 'percentage' ? subtotal * value / 100 : value;
+    return Math.max(0, Math.min(subtotal, Math.round(calculated * 100) / 100));
+  }
+
+  function couponMessage(text, tone = '') {
+    const node = $('#checkoutCouponMessage');
+    if (!node) return;
+    node.textContent = text;
+    node.dataset.tone = tone;
+  }
+
+  function clearCoupon() {
+    activeCoupon = null;
+    const input = $('#checkoutCoupon');
+    if (input) input.value = '';
+    couponMessage('Opening code? Apply it before you pay.');
+  }
+
+  async function applyCoupon() {
+    const input = $('#checkoutCoupon');
+    if (!input || !activeProduct) return;
+    const code = input.value.trim().toUpperCase();
+    if (!code) { clearCoupon(); calculate(); return; }
+    const button = $('#applyCoupon');
+    button.disabled = true;
+    couponMessage('Checking code…');
+    try {
+      const supabase = await ensureClient();
+      const subtotal = productPrice(activeProduct) * selectedQuantity();
+      const { data, error } = await supabase.rpc('validate_coupon', { p_code: code, p_subtotal: subtotal });
+      if (error || !data?.valid) throw new Error(data?.message || error?.message || 'That code is not available.');
+      activeCoupon = { code: data.code, discount_type: data.discount_type, discount_value: data.discount_value, label: data.label || '' };
+      input.value = data.code;
+      couponMessage(`${data.label || data.code} applied — you save ${money(data.discount_amount)}.`, 'success');
+      calculate();
+      window.VeyrathAnalytics?.track?.('select_promotion', { promotion_id: data.code, value: Number(data.discount_amount || 0), currency: 'INR' });
+    } catch (error) {
+      activeCoupon = null;
+      couponMessage(error.message || 'That code is not available.', 'error');
+      calculate();
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function markup() {
-    return `<dialog class="checkout-dialog" id="checkoutDialog" aria-labelledby="checkoutTitle"><button class="checkout-close" type="button" aria-label="Close checkout">×</button><form class="checkout-shell" id="checkoutForm"><header class="checkout-head"><p class="eyebrow">VEYRATH / SECURE CHECKOUT</p><h2 id="checkoutTitle">Complete your signal.</h2><p>Born After Dark. Paid securely through Razorpay.</p></header><div class="checkout-layout"><section class="checkout-fields"><div class="checkout-product"><img id="checkoutProductImage" src="veyrath-tee.jpg" alt=""><div><small id="checkoutProductCategory">VEYRATH</small><strong id="checkoutProductName">Selected piece</strong><span id="checkoutProductPrice">₹0</span></div></div><div class="checkout-options"><label>Size<select id="checkoutSize" name="size" required></select></label><label>Colour<select id="checkoutColour" name="colour" required></select></label><label>Quantity<input id="checkoutQuantity" name="quantity" type="number" min="1" max="10" value="1" required></label></div><h3>Delivery details</h3><div class="checkout-form-grid"><label>Full name<input name="name" autocomplete="name" minlength="2" maxlength="120" required></label><label>Phone<input name="phone" type="tel" inputmode="numeric" autocomplete="tel" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit number" required></label><label class="wide">Email<input name="email" type="email" autocomplete="email" maxlength="320" required></label><label class="wide">Address line 1<input name="address_line1" autocomplete="address-line1" minlength="3" maxlength="240" required></label><label class="wide">Address line 2 <em>optional</em><input name="address_line2" autocomplete="address-line2" maxlength="240"></label><label>City<input name="city" autocomplete="address-level2" minlength="2" maxlength="120" required></label><label>State<input name="state" autocomplete="address-level1" minlength="2" maxlength="120" required></label><label>Pincode<input name="pincode" inputmode="numeric" autocomplete="postal-code" pattern="[1-9][0-9]{5}" maxlength="6" required></label></div></section><aside class="checkout-summary"><p class="eyebrow">Order summary</p><dl><div><dt>Subtotal</dt><dd id="checkoutSubtotal">₹0</dd></div><div><dt>Shipping</dt><dd id="checkoutShipping">—</dd></div><div class="checkout-total"><dt>Total</dt><dd id="checkoutTotal">₹0</dd></div></dl><button class="btn btn-gold" id="checkoutSubmit" type="submit">Pay securely</button><small><span aria-hidden="true">◈</span> Price and availability are rechecked securely before payment.</small><p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p></aside></div></form></dialog>`;
+    return `<dialog class="checkout-dialog" id="checkoutDialog" aria-labelledby="checkoutTitle">
+      <button class="checkout-close" type="button" aria-label="Close checkout">×</button>
+      <form class="checkout-shell" id="checkoutForm">
+        <header class="checkout-head"><p class="eyebrow">VEYRATH / SECURE CHECKOUT</p><h2 id="checkoutTitle">Complete your signal.</h2><p>Born After Dark. Paid securely through Razorpay.</p></header>
+        <div class="checkout-layout">
+          <section class="checkout-fields">
+            <div class="checkout-product"><img id="checkoutProductImage" src="veyrath-tee.jpg" alt=""><div><small id="checkoutProductCategory">VEYRATH</small><strong id="checkoutProductName">Selected piece</strong><span id="checkoutProductPrice">₹0</span></div></div>
+            <div class="checkout-options"><label>Size<select id="checkoutSize" name="size" required></select></label><label>Colour<select id="checkoutColour" name="colour" required></select></label><label>Quantity<input id="checkoutQuantity" name="quantity" type="number" min="1" max="10" value="1" required></label></div>
+            <h3>Delivery details</h3>
+            <div class="checkout-form-grid"><label>Full name<input name="name" autocomplete="name" minlength="2" maxlength="120" required></label><label>Phone<input name="phone" type="tel" inputmode="numeric" autocomplete="tel" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit number" required></label><label class="wide">Email<input name="email" type="email" autocomplete="email" maxlength="320" required></label><label class="wide">Address line 1<input name="address_line1" autocomplete="address-line1" minlength="3" maxlength="240" required></label><label class="wide">Address line 2 <em>optional</em><input name="address_line2" autocomplete="address-line2" maxlength="240"></label><label>City<input name="city" autocomplete="address-level2" minlength="2" maxlength="120" required></label><label>State<input name="state" autocomplete="address-level1" minlength="2" maxlength="120" required></label><label>Pincode<input name="pincode" inputmode="numeric" autocomplete="postal-code" pattern="[1-9][0-9]{5}" maxlength="6" required></label></div>
+          </section>
+          <aside class="checkout-summary">
+            <p class="eyebrow">Order summary</p>
+            <div class="checkout-coupon"><label for="checkoutCoupon">Opening code <em>optional</em></label><div><input id="checkoutCoupon" inputmode="text" maxlength="40" autocomplete="off" placeholder="AFTERDARK10"><button id="applyCoupon" type="button">Apply</button></div><small id="checkoutCouponMessage" aria-live="polite">Opening code? Apply it before you pay.</small></div>
+            <dl><div><dt>Subtotal</dt><dd id="checkoutSubtotal">₹0</dd></div><div class="checkout-discount" id="checkoutDiscountRow" hidden><dt>Offer</dt><dd id="checkoutDiscount">−₹0</dd></div><div><dt>Shipping</dt><dd id="checkoutShipping">—</dd></div><div class="checkout-total"><dt>Total</dt><dd id="checkoutTotal">₹0</dd></div></dl>
+            <button class="btn btn-gold" id="checkoutSubmit" type="submit">Pay securely</button><small><span aria-hidden="true">◇</span> Price and availability are rechecked securely before payment.</small><p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p>
+          </aside>
+        </div>
+      </form>
+    </dialog>`;
   }
 
   async function ensureClient() {
@@ -60,6 +133,7 @@
     $('#checkoutQuantity').value = '1';
     $('#checkoutForm').reset();
     $('#checkoutQuantity').value = '1';
+    clearCoupon();
     message(''); calculate();
   }
 
@@ -69,6 +143,7 @@
       fillProduct(product);
       $('#productModal')?.close();
       showCheckout();
+      window.VeyrathAnalytics?.track?.('begin_checkout', { items: [{ item_id: String(product.id), item_name: product.name, price: productPrice(product), quantity: 1 }], value: productPrice(product), currency: 'INR' });
     } catch (error) {
       window.alert(error.message || 'Checkout is unavailable right now.');
     }
@@ -96,7 +171,7 @@
       values.phone = String(values.phone || '').replace(/\D/g, '');
       values.pincode = String(values.pincode || '').replace(/\D/g, '');
       const { data: pending, error: pendingError } = await supabase.rpc('create_pending_order', {
-        p_customer: { name: values.name, phone: values.phone, email: values.email, address_line1: values.address_line1, address_line2: values.address_line2 || '', city: values.city, state: values.state, pincode: values.pincode },
+        p_customer: { name: values.name, phone: values.phone, email: values.email, address_line1: values.address_line1, address_line2: values.address_line2 || '', city: values.city, state: values.state, pincode: values.pincode, coupon_code: activeCoupon?.code || '' },
         p_items: [{ product_id: activeProduct.id, size: values.size, colour: values.colour, quantity: Number(values.quantity) }],
       });
       if (pendingError) throw new Error(pendingError.message || 'Could not save the order.');
@@ -129,8 +204,9 @@
           sessionStorage.removeItem('veyrath_pending_order');
           form.reset();
           $('#checkoutTitle').textContent = 'Payment confirmed.';
-          message(`Order ${verified.order_number} is paid. We will prepare it after dark.`, 'success');
+          message(`Order ${verified.order_number} is confirmed. We will email tracking once your piece is dispatched.`, 'success');
           $('#checkoutSubmit').hidden = true;
+          window.VeyrathAnalytics?.track?.('purchase', { transaction_id: verified.order_number, value: Number(pending.total_amount || paymentOrder.amount / 100 || 0), currency: 'INR', coupon: activeCoupon?.code || undefined });
         },
       });
       razorpay.on('payment.failed', (response) => { razorpayFailureMessage = response?.error?.description || 'Payment failed. No fulfilment order was created.'; setBusy(false); });
@@ -148,6 +224,8 @@
     $('#checkoutDialog').addEventListener('click', (event) => { if (event.target === event.currentTarget) close(); });
     $('#checkoutDialog').addEventListener('close', () => document.body.classList.remove('checkout-open'));
     $('#checkoutQuantity').addEventListener('input', calculate);
+    $('#applyCoupon').addEventListener('click', applyCoupon);
+    $('#checkoutCoupon').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); applyCoupon(); } });
     $('#checkoutForm').addEventListener('submit', submit);
   }
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
