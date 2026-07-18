@@ -53,6 +53,7 @@
   let remoteSizeCharts = null;
   let remoteCollections = null;
   let remoteCollectionProducts = null;
+  let remoteCouponOffers = null;
   let supabaseClient = null;
   let remoteConfigured = false;
 
@@ -74,6 +75,16 @@
   const collectionProducts = () => Array.isArray(remoteCollectionProducts)
     ? remoteCollectionProducts
     : read(KEYS.collectionProducts, window.VEYRATH_COLLECTION_PRODUCTS || []);
+  const couponOffers = () => Array.isArray(remoteCouponOffers) ? remoteCouponOffers : [];
+  const offerForProduct = (productId) => {
+    const offers = couponOffers();
+    return offers.find((offer) => String(offer.product_id || '') === String(productId) && offer.auto_apply)
+      || offers.find((offer) => String(offer.product_id || '') === String(productId))
+      || offers.find((offer) => offer.scope !== 'product' && offer.auto_apply)
+      || offers.find((offer) => offer.scope !== 'product')
+      || null;
+  };
+  const offerLabel = (offer) => !offer ? '' : offer.discount_type === 'percentage' ? `${Number(offer.discount_value)}% OFF` : `${money(offer.discount_value)} OFF`;
 
   async function fetchPublicProducts(config) {
     const endpoint = `${String(config.url).replace(/\/$/, '')}/rest/v1/storefront_products?select=*&order=sort_order.desc`;
@@ -117,6 +128,7 @@
         remoteSizeCharts ||= [];
         remoteCollections ||= [];
         remoteCollectionProducts ||= [];
+        remoteCouponOffers ||= [];
         return;
       }
     }
@@ -128,12 +140,13 @@
         supabaseClient.from('hero_slides').select('*').eq('is_published', true).order('sort_order'),
         supabaseClient.from('size_charts').select('*').eq('is_published', true).order('sort_order'),
         supabaseClient.from('collections').select('*').eq('is_published', true).order('sort_order'),
-        supabaseClient.from('collection_products').select('collection_id,product_id,sort_order').order('sort_order')
+        supabaseClient.from('collection_products').select('collection_id,product_id,sort_order').order('sort_order'),
+        supabaseClient.from('public_coupon_offers').select('*').order('auto_apply', { ascending: false }).order('created_at', { ascending: false })
       ];
       if (!Array.isArray(remoteProducts)) {
         requests.push(supabaseClient.from('storefront_products').select('*').order('sort_order', { ascending: false }));
       }
-      const [settings, slides, chartRows, collectionRows, membershipRows, catalogue] = await Promise.all(requests);
+      const [settings, slides, chartRows, collectionRows, membershipRows, couponRows, catalogue] = await Promise.all(requests);
 
       if (catalogue && !catalogue.error) {
         remoteProducts = catalogue.data || [];
@@ -156,6 +169,7 @@
       remoteSizeCharts = chartRows.error ? [] : (chartRows.data || []);
       remoteCollections = collectionRows.error ? [] : (collectionRows.data || []);
       remoteCollectionProducts = membershipRows.error ? [] : (membershipRows.data || []);
+      remoteCouponOffers = couponRows.error ? [] : (couponRows.data || []);
       write(KEYS.sizeCharts, remoteSizeCharts);
       write(KEYS.collections, remoteCollections);
       write(KEYS.collectionProducts, remoteCollectionProducts);
@@ -167,6 +181,7 @@
     remoteSizeCharts ||= [];
     remoteCollections ||= [];
     remoteCollectionProducts ||= [];
+    remoteCouponOffers ||= [];
   }
 
   function header() {
@@ -278,17 +293,20 @@
     const price = productPrice(product);
     const compare = Number(product.compare_at_price || product.compare_at || 0);
     const collection = collectionsForProduct(product.id)[0];
+    const offer = offerForProduct(product.id);
     return `
       <article class="product-card reveal">
         <button class="product-media" type="button" data-product-view="${esc(product.id)}">
           <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy">
           <span class="product-state">${product.fulfilment_status === 'ready' ? 'Made after order' : 'Limited release'}</span>
           ${collection ? `<span class="product-collection-badge">${esc(collection.title)}</span>` : ''}
+          ${offer ? `<span class="product-offer-badge">${esc(offerLabel(offer))} · ${esc(offer.code)}</span>` : ''}
           <span class="quick-label">Quick view</span>
         </button>
         <div class="product-info">
           <div><p>${esc(product.category || 'VEYRATH')}</p><h3>${esc(product.name)}</h3></div>
           <div class="price"><strong>${money(price)}</strong>${compare > price ? `<s>${money(compare)}</s>` : ''}</div>
+          ${offer ? `<p class="product-promo-note">${esc(offer.label || offerLabel(offer))} · ${esc(offer.code)} at checkout</p>` : ''}
           ${tags.length ? `<ul>${tags.map((tag) => `<li>${esc(tag)}</li>`).join('')}</ul>` : ''}
           <div class="product-actions"><button type="button" data-product-view="${esc(product.id)}">Details</button><button type="button" data-buy-now="${esc(product.id)}">Buy now</button></div>
         </div>
@@ -336,6 +354,7 @@
     const galleryMarkup = gallery.map((image, index) => `<img src="${esc(image)}" alt="${esc(product.name)} gallery image ${index + 1}" ${index ? 'loading="lazy"' : ''}>`).join('');
     const price = productPrice(product);
     const madeLabel = product.fulfilment_status === 'paused' ? 'Temporarily unavailable' : 'Made after order in India';
+    const offer = offerForProduct(product.id);
 
     $('#productModalBody').innerHTML = `
       <div class="modal-grid">
@@ -347,6 +366,7 @@
           <p class="eyebrow">${esc(product.category || 'VEYRATH')}</p>
           <h2>${esc(product.name)}</h2>
           <div class="price price-large"><strong>${money(price)}</strong>${Number(product.compare_at_price || 0) > price ? `<s>${money(product.compare_at_price)}</s>` : ''}</div>
+          ${offer ? `<p class="modal-offer">${esc(offer.label || offerLabel(offer))} <b>${esc(offer.code)}</b>${offer.auto_apply ? ' applies automatically at checkout.' : ' is ready at checkout.'}</p>` : ''}
           <p>${esc(product.description || 'A VEYRATH piece shaped for silent movement.')}</p>
           <dl>
             <div><dt>Sizes</dt><dd>${esc(split(product.sizes).join(' / ') || 'One size')}</dd></div>
@@ -412,11 +432,16 @@
     secondary.href = safeLink(hero.secondary_link) || '#inner-circle';
 
     const fallbackOffers = [
-      { kicker: 'FIRST SIGNAL', text: '10% OFF WITH CODE AFTERDARK10' },
+      { kicker: 'LAUNCH OFFER', text: '20% OFF WITH CODE LAUNCH20' },
       { kicker: 'FREE SHIPPING', text: 'ON ORDERS ABOVE ₹1,999' },
       { kicker: 'INNER CIRCLE', text: 'EARLY ACCESS TO EVERY DROP' }
     ];
-    const offers = data.offers?.length ? data.offers : fallbackOffers;
+    const liveOffers = couponOffers().filter((offer) => offer.scope !== 'product').map((offer) => ({
+      kicker: offer.auto_apply ? 'LAUNCH OFFER' : 'LIVE OFFER',
+      text: `${offerLabel(offer)}${offer.auto_apply ? ' APPLIED AT CHECKOUT' : ` WITH CODE ${offer.code}`}`
+    }));
+    const supportingOffers = (data.offers || []).filter((offer) => !/\bcode\b/i.test(String(offer.text || '')));
+    const offers = liveOffers.length ? [...liveOffers, ...supportingOffers] : (data.offers?.length ? data.offers : fallbackOffers);
     const offerSet = offers.map((offer) => `<article><small>${esc(offer.kicker || 'VEYRATH')}</small><strong>${esc(offer.text || 'BORN AFTER DARK')}</strong><span>✦</span></article>`).join('');
     $('[data-offer-rail]').innerHTML = `<div class="offer-set">${offerSet}</div><div class="offer-set" aria-hidden="true">${offerSet}</div>`;
 
@@ -896,6 +921,6 @@
     });
   }
 
-  window.VeyrathStore = { KEYS, read, write, products, site, sizeCharts, collections, collectionProducts };
+  window.VeyrathStore = { KEYS, read, write, products, site, sizeCharts, collections, collectionProducts, couponOffers, offerForProduct };
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 })();

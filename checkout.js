@@ -45,13 +45,13 @@
     activeCoupon = null;
     const input = $('#checkoutCoupon');
     if (input) input.value = '';
-    couponMessage('Opening code? Apply it before you pay.');
+    couponMessage('Have an offer code? Apply it before you pay.');
   }
 
-  async function applyCoupon() {
+  async function applyCoupon(requestedCode = '') {
     const input = $('#checkoutCoupon');
     if (!input || !activeProduct) return;
-    const code = input.value.trim().toUpperCase();
+    const code = String(requestedCode || input.value || '').trim().toUpperCase();
     if (!code) { clearCoupon(); calculate(); return; }
     const button = $('#applyCoupon');
     button.disabled = true;
@@ -59,7 +59,8 @@
     try {
       const supabase = await ensureClient();
       const subtotal = productPrice(activeProduct) * selectedQuantity();
-      const { data, error } = await supabase.rpc('validate_coupon', { p_code: code, p_subtotal: subtotal });
+      const email = String($('#checkoutForm')?.elements?.email?.value || '').trim().toLowerCase();
+      const { data, error } = await supabase.rpc('validate_coupon_for_checkout', { p_code: code, p_subtotal: subtotal, p_product_ids: [activeProduct.id], p_email: email });
       if (error || !data?.valid) throw new Error(data?.message || error?.message || 'That code is not available.');
       activeCoupon = { code: data.code, discount_type: data.discount_type, discount_value: data.discount_value, label: data.label || '' };
       input.value = data.code;
@@ -89,7 +90,7 @@
           </section>
           <aside class="checkout-summary">
             <p class="eyebrow">Order summary</p>
-            <div class="checkout-coupon"><label for="checkoutCoupon">Opening code <em>optional</em></label><div><input id="checkoutCoupon" inputmode="text" maxlength="40" autocomplete="off" placeholder="AFTERDARK10"><button id="applyCoupon" type="button">Apply</button></div><small id="checkoutCouponMessage" aria-live="polite">Opening code? Apply it before you pay.</small></div>
+            <div class="checkout-coupon"><label for="checkoutCoupon">Offer code <em>optional</em></label><div><input id="checkoutCoupon" inputmode="text" maxlength="40" autocomplete="off" placeholder="LAUNCH20"><button id="applyCoupon" type="button">Apply</button></div><small id="checkoutCouponMessage" aria-live="polite">Have an offer code? Apply it before you pay.</small></div>
             <dl><div><dt>Subtotal</dt><dd id="checkoutSubtotal">₹0</dd></div><div class="checkout-discount" id="checkoutDiscountRow" hidden><dt>Offer</dt><dd id="checkoutDiscount">−₹0</dd></div><div><dt>Shipping</dt><dd id="checkoutShipping">—</dd></div><div class="checkout-total"><dt>Total</dt><dd id="checkoutTotal">₹0</dd></div></dl>
             <button class="btn btn-gold" id="checkoutSubmit" type="submit">Pay securely</button><small><span aria-hidden="true">◇</span> Price and availability are rechecked securely before payment.</small><p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p>
           </aside>
@@ -134,6 +135,12 @@
     $('#checkoutForm').reset();
     $('#checkoutQuantity').value = '1';
     clearCoupon();
+    const autoOffer = window.VeyrathStore?.offerForProduct?.(product.id);
+    if (autoOffer?.auto_apply && autoOffer.code) {
+      $('#checkoutCoupon').value = autoOffer.code;
+      couponMessage(`${autoOffer.label || autoOffer.code} is being applied…`);
+      setTimeout(() => applyCoupon(autoOffer.code), 0);
+    }
     message(''); calculate();
   }
 

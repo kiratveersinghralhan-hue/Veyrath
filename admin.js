@@ -41,6 +41,7 @@
   let sizeCharts = [];
   let collections = [];
   let collectionProducts = [];
+  let coupons = [];
   let siteData = clone(window.VEYRATH_SITE_DATA || {});
   let featureSchemaReady = true;
   let collectionSelection = new Set();
@@ -158,7 +159,7 @@
 
   async function loadAll() {
     status('Refreshing secure data…');
-    const [catalogue, orderData, settings, slides, inbox, audience, chartRows, collectionRows, membershipRows] = await Promise.all([
+    const [catalogue, orderData, settings, slides, inbox, audience, chartRows, collectionRows, membershipRows, couponRows] = await Promise.all([
       client.from('admin_products').select('*').order('sort_order', { ascending: false }),
       client.from('orders').select('*,order_items(*)').order('created_at', { ascending: false }).limit(500),
       client.from('site_settings').select('value').eq('key', 'site_data').maybeSingle(),
@@ -167,7 +168,8 @@
       client.from('newsletter_signups').select('*').order('created_at', { ascending: false }).limit(500),
       client.from('size_charts').select('*').order('sort_order'),
       client.from('collections').select('*').order('sort_order'),
-      client.from('collection_products').select('*').order('sort_order')
+      client.from('collection_products').select('*').order('sort_order'),
+      client.from('coupons').select('*').order('created_at', { ascending: false })
     ]);
 
     const firstCoreError = [catalogue, orderData, settings, slides, inbox, audience].find((result) => result.error)?.error;
@@ -176,7 +178,7 @@
       throw firstCoreError;
     }
 
-    const featureErrors = [chartRows, collectionRows, membershipRows].filter((result) => result.error).map((result) => result.error);
+    const featureErrors = [chartRows, collectionRows, membershipRows, couponRows].filter((result) => result.error).map((result) => result.error);
     featureSchemaReady = featureErrors.length === 0;
     products = catalogue.data || [];
     orders = orderData.data || [];
@@ -185,6 +187,7 @@
     sizeCharts = chartRows.error ? [] : (chartRows.data || []);
     collections = collectionRows.error ? [] : (collectionRows.data || []);
     collectionProducts = membershipRows.error ? [] : (membershipRows.data || []);
+    coupons = couponRows.error ? [] : (couponRows.data || []);
     siteData = { ...clone(window.VEYRATH_SITE_DATA || {}), ...(settings.data?.value || {}) };
     if (slides.data?.length) {
       siteData.banners = slides.data.map((slide) => ({
@@ -198,7 +201,7 @@
     }
     renderAll();
     if (!featureSchemaReady) {
-      status('Run veyrath-feature-upgrade-collections-sizecharts.sql once to enable collections and size charts.', 'error');
+      status('Run the required feature SQL upgrades once to enable every admin module, including coupons.', 'error');
       return;
     }
     status(`Updated ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}.`);
@@ -411,6 +414,128 @@
     if (filter === 'printrove_failed') return order.fulfilment_status === 'printrove_failed';
     if (filter === 'admin_hold') return order.admin_hold;
     return true;
+  }
+
+  function couponProductLabel(productId) {
+    return products.find((product) => String(product.id) === String(productId))?.name || 'Selected product';
+  }
+
+  function couponDateValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+  }
+
+  function syncCouponTarget() {
+    const form = $('#couponForm');
+    if (!form) return;
+    const isProduct = form.elements.scope.value === 'product';
+    form.elements.product_id.disabled = !isProduct;
+    if (!isProduct) form.elements.product_id.value = '';
+  }
+
+  function resetCoupon() {
+    const form = $('#couponForm');
+    form.reset();
+    form.elements.id.value = '';
+    form.elements.discount_type.value = 'percentage';
+    form.elements.minimum_order_amount.value = '0';
+    form.elements.is_active.checked = true;
+    form.elements.is_public.checked = true;
+    form.elements.auto_apply.checked = false;
+    $('#couponFormTitle').textContent = 'Create coupon';
+    message(form, '');
+    syncCouponTarget();
+  }
+
+  function renderCoupons() {
+    const productSelect = $('#couponProduct');
+    if (!productSelect) return;
+    const current = productSelect.value;
+    productSelect.innerHTML = `<option value="">Choose a product</option>${products.map((product) => `<option value="${esc(product.id)}">${esc(product.name)}</option>`).join('')}`;
+    if (products.some((product) => String(product.id) === String(current))) productSelect.value = current;
+    $('#couponsTable').innerHTML = coupons.map((coupon) => {
+      const amount = coupon.discount_type === 'percentage' ? `${Number(coupon.discount_value)}% off` : money(coupon.discount_value);
+      const target = coupon.scope === 'product' ? couponProductLabel(coupon.product_id) : 'Entire order';
+      const access = coupon.customer_email ? `Private · ${coupon.customer_email}` : coupon.is_public ? 'Public website' : 'Private code';
+      const windowText = [coupon.starts_at ? `Starts ${new Date(coupon.starts_at).toLocaleDateString('en-IN')}` : '', coupon.ends_at ? `Ends ${new Date(coupon.ends_at).toLocaleDateString('en-IN')}` : ''].filter(Boolean).join(' · ');
+      return `<tr><td><strong>${esc(coupon.code)}</strong><br><small>${esc(coupon.label || '')}</small></td><td><strong>${esc(amount)}</strong>${coupon.auto_apply ? '<br><small>Auto-applies</small>' : ''}</td><td>${esc(target)}${Number(coupon.minimum_order_amount || 0) ? `<br><small>Min ${money(coupon.minimum_order_amount)}</small>` : ''}</td><td><span class="status-pill status-${coupon.is_active ? 'paid' : 'pending'}">${coupon.is_active ? 'active' : 'paused'}</span><br><small>${esc(access)}</small>${windowText ? `<br><small>${esc(windowText)}</small>` : ''}</td><td>${Number(coupon.used_count || 0)}${coupon.usage_limit ? ` / ${Number(coupon.usage_limit)}` : ''}</td><td><div class="order-actions"><button type="button" data-edit-coupon="${coupon.id}">Edit</button><button type="button" data-toggle-coupon="${coupon.id}">${coupon.is_active ? 'Pause' : 'Activate'}</button><button class="danger" type="button" data-delete-coupon="${coupon.id}">Delete</button></div></td></tr>`;
+    }).join('') || '<tr><td colspan="6">No coupons yet. Create a public launch offer above.</td></tr>';
+    syncCouponTarget();
+  }
+
+  function editCoupon(couponId) {
+    const coupon = coupons.find((item) => String(item.id) === String(couponId));
+    if (!coupon) return;
+    const form = $('#couponForm');
+    form.elements.id.value = coupon.id;
+    form.elements.code.value = coupon.code || '';
+    form.elements.label.value = coupon.label || '';
+    form.elements.discount_type.value = coupon.discount_type || 'percentage';
+    form.elements.discount_value.value = coupon.discount_value || '';
+    form.elements.scope.value = coupon.scope || (coupon.product_id ? 'product' : 'order');
+    renderCoupons();
+    form.elements.product_id.value = coupon.product_id || '';
+    form.elements.minimum_order_amount.value = coupon.minimum_order_amount || 0;
+    form.elements.usage_limit.value = coupon.usage_limit || '';
+    form.elements.starts_at.value = couponDateValue(coupon.starts_at);
+    form.elements.ends_at.value = couponDateValue(coupon.ends_at);
+    form.elements.customer_email.value = coupon.customer_email || '';
+    form.elements.is_active.checked = coupon.is_active !== false;
+    form.elements.is_public.checked = coupon.is_public !== false;
+    form.elements.auto_apply.checked = Boolean(coupon.auto_apply);
+    $('#couponFormTitle').textContent = `Edit ${coupon.code}`;
+    syncCouponTarget();
+    activate('coupons');
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function submitCoupon(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const scope = values.scope === 'product' ? 'product' : 'order';
+    const customerEmail = String(values.customer_email || '').trim().toLowerCase();
+    if (scope === 'product' && !values.product_id) return message(form, 'Choose the one product this coupon should apply to.');
+    const code = String(values.code || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!/^[A-Z0-9_-]{3,40}$/.test(code)) return message(form, 'Use 3-40 letters, numbers, hyphens or underscores in the code.');
+    const payload = {
+      id: values.id || uuid(), code, label: String(values.label || '').trim(), discount_type: values.discount_type,
+      discount_value: Number(values.discount_value || 0), scope, product_id: scope === 'product' ? values.product_id : null,
+      minimum_order_amount: Number(values.minimum_order_amount || 0), usage_limit: values.usage_limit ? Number(values.usage_limit) : null,
+      starts_at: values.starts_at ? new Date(values.starts_at).toISOString() : null, ends_at: values.ends_at ? new Date(values.ends_at).toISOString() : null,
+      customer_email: customerEmail || null, is_active: form.elements.is_active.checked,
+      is_public: customerEmail ? false : form.elements.is_public.checked, auto_apply: customerEmail ? false : form.elements.auto_apply.checked
+    };
+    if (payload.discount_value <= 0 || (payload.discount_type === 'percentage' && payload.discount_value > 100)) return message(form, 'Use a discount above zero and no more than 100% for percentage offers.');
+    message(form, 'Saving coupon...');
+    try {
+      const { error } = await client.from('coupons').upsert(payload);
+      if (error) throw error;
+      resetCoupon();
+      await loadAll();
+      message(form, 'Coupon saved. Public offers will appear on the storefront shortly.');
+    } catch (error) { message(form, error.message || 'Could not save this coupon.'); }
+  }
+
+  async function couponAction(event) {
+    const edit = event.target.closest('[data-edit-coupon]');
+    const toggle = event.target.closest('[data-toggle-coupon]');
+    const remove = event.target.closest('[data-delete-coupon]');
+    if (edit) return editCoupon(edit.dataset.editCoupon);
+    const couponId = toggle?.dataset.toggleCoupon || remove?.dataset.deleteCoupon;
+    const coupon = coupons.find((item) => String(item.id) === String(couponId));
+    if (!coupon) return;
+    if (remove) {
+      if (!confirm(`Delete coupon ${coupon.code}? This cannot be used for new orders.`)) return;
+      const { error } = await client.from('coupons').delete().eq('id', coupon.id);
+      if (error) return alert(error.message);
+    }
+    if (toggle) {
+      const { error } = await client.from('coupons').update({ is_active: !coupon.is_active }).eq('id', coupon.id);
+      if (error) return alert(error.message);
+    }
+    await loadAll();
   }
 
   function renderOrders() {
@@ -911,8 +1036,10 @@
     $('#statPaid').textContent = orders.filter((order) => order.payment_status === 'paid').length;
     $('#statPrintrove').textContent = orders.filter((order) => ['not_sent', 'printrove_failed'].includes(order.fulfilment_status) && order.payment_status === 'paid').length;
     $('#statHolds').textContent = orders.filter((order) => order.admin_hold).length;
+    $('#statCoupons').textContent = coupons.filter((coupon) => coupon.is_active && coupon.is_public).length;
     renderProducts();
     renderOrders();
+    renderCoupons();
     populateHomepage();
     renderHomePins();
     renderCollections();
@@ -1002,6 +1129,11 @@
     $('#orderFilter').addEventListener('change', renderOrders);
     $('#refreshOrders').addEventListener('click', loadAll);
     $('#exportOrdersCsv').addEventListener('click', exportOrders);
+
+    $('#couponForm').addEventListener('submit', submitCoupon);
+    $('#couponReset').addEventListener('click', resetCoupon);
+    $('#couponScope').addEventListener('change', syncCouponTarget);
+    $('#couponsTable').addEventListener('click', couponAction);
 
     $('#homepageForm').addEventListener('submit', submitHomepage);
     $('#homePinList').addEventListener('click', homePinAction);

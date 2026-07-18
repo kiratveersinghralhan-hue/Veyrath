@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en-IN">
 <head>
   <meta charset="utf-8">
@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#080808">
   <link rel="icon" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260716-collection-dropdown">
+  <link rel="stylesheet" href="styles.css?v=20260718-coupon-studio">
 </head>
 <body class="admin-body">
   <section class="admin-login" id="adminLogin">
@@ -42,6 +42,7 @@
         <button class="is-active" data-admin-tab="overview">Overview</button>
         <button data-admin-tab="orders">Orders</button>
         <button data-admin-tab="products">Products</button>
+        <button data-admin-tab="coupons">Offers & coupons</button>
         <button data-admin-tab="homepage">Homepage</button>
         <button data-admin-tab="collections">Collections</button>
         <button data-admin-tab="sizecharts">Size charts</button>
@@ -63,6 +64,7 @@
             <article class="stat-card"><span>Paid orders</span><strong id="statPaid">0</strong></article>
             <article class="stat-card"><span>Printrove pending</span><strong id="statPrintrove">0</strong></article>
             <article class="stat-card"><span>Admin holds</span><strong id="statHolds">0</strong></article>
+            <article class="stat-card"><span>Live offers</span><strong id="statCoupons">0</strong></article>
           </div>
           <div class="admin-card admin-welcome">
             <p class="eyebrow">Protected workflow</p>
@@ -122,6 +124,33 @@
               <h2>Current catalogue</h2>
               <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Image</th><th>Piece</th><th>Price / profit</th><th>Placement</th><th>Actions</th></tr></thead><tbody id="productsTable"></tbody></table></div>
             </div>
+          </div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="coupons">
+          <div class="admin-heading"><div><p class="eyebrow">Promotion studio</p><h1>Offers &amp;<br>coupons.</h1><p class="admin-muted">Create launch, public, private, and single-product discounts without editing code.</p></div></div>
+          <div class="admin-grid">
+            <form class="admin-card admin-form" id="couponForm">
+              <input type="hidden" name="id">
+              <h2 id="couponFormTitle">Create coupon</h2>
+              <div class="form-grid">
+                <div class="field"><label>Coupon code</label><input name="code" maxlength="40" placeholder="LAUNCH20" required></div>
+                <div class="field"><label>Customer-facing label</label><input name="label" maxlength="160" placeholder="Launch offer: 20% off"></div>
+                <div class="field"><label>Discount type</label><select name="discount_type"><option value="percentage">Percentage off</option><option value="fixed">Fixed rupees off</option></select></div>
+                <div class="field"><label>Discount value</label><input name="discount_value" type="number" min="0.01" step="0.01" required placeholder="20"></div>
+                <div class="field"><label>Applies to</label><select name="scope" id="couponScope"><option value="order">Entire order</option><option value="product">One product only</option></select></div>
+                <div class="field"><label>Selected product</label><select name="product_id" id="couponProduct"><option value="">Choose a product</option></select></div>
+                <div class="field"><label>Minimum order ₹</label><input name="minimum_order_amount" type="number" min="0" step="0.01" value="0"></div>
+                <div class="field"><label>Total uses allowed</label><input name="usage_limit" type="number" min="1" step="1" placeholder="Leave blank for no limit"></div>
+                <div class="field"><label>Starts at</label><input name="starts_at" type="datetime-local"></div>
+                <div class="field"><label>Ends at</label><input name="ends_at" type="datetime-local"></div>
+                <div class="field field-full"><label>Private customer email <em>optional</em></label><input name="customer_email" type="email" placeholder="Use this for a personal coupon. Leave blank for a public code."><span class="upload-note">A private coupon only works for this exact checkout email and is never shown publicly.</span></div>
+              </div>
+              <div class="checkbox-row"><label><input name="is_active" type="checkbox" checked> Active</label><label><input name="is_public" type="checkbox" checked> Show on website</label><label><input name="auto_apply" type="checkbox"> Apply automatically when eligible</label></div>
+              <div class="button-row"><button class="primary" type="submit">Save coupon</button><button id="couponReset" type="button">Clear</button></div>
+              <small class="form-message" aria-live="polite"></small>
+            </form>
+            <div class="admin-card"><h2>Current coupons</h2><p class="admin-muted">A public offer is visible on the website. A private email coupon is for one customer only.</p><div class="admin-table-wrap"><table class="admin-table coupons-table"><thead><tr><th>Code</th><th>Discount</th><th>Target</th><th>Access</th><th>Uses</th><th>Actions</th></tr></thead><tbody id="couponsTable"></tbody></table></div></div>
           </div>
         </section>
 
@@ -245,10 +274,10 @@
       </main>
     </div>
   </div>
-  <script src="site-data.js?v=20260716-collection-dropdown" defer></script>
-  <script src="products.js?v=20260702" defer></script>
-  <script src="supabase-config.js?v=20260710-force-cefx-project" defer></script>
-  <script src="admin.js?v=20260716-collection-dropdown" defer></script>
+  <script src="site-data.js?v=20260718-coupon-studio" defer></script>
+  <script src="products.js?v=20260718-coupon-studio" defer></script>
+  <script src="supabase-config.js?v=20260718-coupon-studio" defer></script>
+  <script src="admin.js?v=20260718-coupon-studio" defer></script>
 </body>
 </html>
 
