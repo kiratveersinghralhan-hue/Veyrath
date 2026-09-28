@@ -14,8 +14,6 @@
     about_text: 'VEYRATH is made for the ones who move in silence. Every piece blends oversized streetwear, subtle astrology details, and dark luxury energy — designed to feel powerful without being loud.',
     marquee_text: 'BORN AFTER DARK  •  OVERSIZED FIRST  •  BUILT IN INDIA  •  MADE AFTER ORDER  •  SILENT AMBITION  •',
     offers: [
-      { kicker: 'LAUNCH OFFER', text: '20% OFF WITH CODE LAUNCH20' },
-      { kicker: 'FREE SHIPPING', text: 'ON ORDERS ABOVE ₹1,999' },
       { kicker: 'INNER CIRCLE', text: 'EARLY ACCESS TO EVERY DROP' },
       { kicker: 'MADE AFTER ORDER', text: 'LESS EXCESS. MORE INTENTION.' }
     ],

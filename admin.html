@@ -75,7 +75,7 @@
 
         <section class="admin-panel" data-admin-panel="orders">
           <div class="admin-heading"><div><p class="eyebrow">Payment & fulfilment</p><h1>Orders.</h1></div><div class="button-row"><button id="refreshOrders" type="button">Refresh</button><button class="primary" id="exportOrdersCsv" type="button">Export CSV</button></div></div>
-          <div class="admin-order-toolbar"><label>Filter<select id="orderFilter"><option value="all">All orders</option><option value="paid">Paid</option><option value="pending">Payment pending</option><option value="printrove_failed">Printrove failed</option><option value="admin_hold">Manual hold</option></select></label><span id="ordersStatus" role="status"></span></div>
+          <div class="admin-order-toolbar"><label>Filter<select id="orderFilter"><option value="all">All orders</option><option value="paid">Paid</option><option value="pending">Payment pending</option><option value="action_required">Action / reconciliation required</option><option value="admin_hold">Manual hold</option></select></label><span id="commerceStatus" role="status"></span><span id="ordersStatus" role="status"></span></div>
           <div class="admin-card"><div class="admin-table-wrap"><table class="admin-table orders-table"><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Payment</th><th>Printrove</th><th>Total</th><th>Actions</th></tr></thead><tbody id="ordersTable"></tbody></table></div></div>
         </section>
 
@@ -95,7 +95,7 @@
                 <div class="field"><label>Gender</label><select name="gender"><option>Unisex</option><option>Men</option><option>Women</option></select></div>
                 <div class="field"><label>Sizes</label><input name="sizes" placeholder="S, M, L, XL"></div>
                 <div class="field"><label>Colours</label><input name="colours" placeholder="Ink Black, Oxblood"></div>
-                <div class="field"><label>Rating</label><input name="rating" type="number" min="0" max="5" step="0.1" value="4.5"></div>
+                <div class="field"><label>Rating</label><input name="rating" type="number" min="0" max="5" step="0.1" value="0" readonly></div>
                 <div class="field"><label>Sort order</label><input name="sort_order" type="number" value="0"></div>
                 <div class="field"><label>Homepage order</label><input name="home_sort_order" type="number" value="0" placeholder="Higher shows first"></div>
                 <div class="field field-full"><label>Description</label><textarea name="description"></textarea></div>
@@ -108,15 +108,15 @@
                 <div class="field"><label>Printrove Product ID</label><input name="printrove_product_id" inputmode="numeric"></div>
                 <div class="field"><label>Default Printrove Variant ID</label><input name="printrove_variant_id" inputmode="numeric"></div>
                 <div class="field"><label>Printrove product type</label><input name="printrove_product_type" placeholder="Oversized T-Shirt"></div>
-                <div class="field"><label>Print type</label><input name="print_type" placeholder="DTG"></div>
-                <div class="field field-full"><label>Variant map JSON</label><textarea name="printrove_variant_map" class="variant-map" placeholder='{"Ink Black|S":"460021","Ink Black|M":"460022"}'></textarea><span class="upload-note">Use Colour|Size keys. This prevents the wrong size reaching Printrove.</span></div>
+                <div class="field"><label>Print type</label><input name="printrove_print_type" placeholder="DTG"></div>
+                <div class="field field-full"><label>Variant map JSON</label><textarea name="printrove_variant_map" class="variant-map" placeholder='{"Colour|Size":{"variant_id":"verified supplier variant ID"}}'></textarea><span class="upload-note">Use Colour|Size keys with {"variant_id":"…"} values. Ready attests that every mapping was verified.</span></div>
                 <div class="field"><label>Base cost &#8377;</label><input name="base_cost" type="number" min="0" step="0.01"></div>
-                <div class="field"><label>Shipping cost &#8377;</label><input name="shipping_cost" type="number" min="0" step="0.01"></div>
+                <div class="field"><label>Customer shipping charge &#8377;</label><input name="shipping_cost" type="number" min="0" step="0.01"></div><div class="field"><label>Private supplier shipping cost &#8377;</label><input name="supplier_shipping_cost" type="number" min="0" step="0.01"></div>
                 <div class="field"><label>Profit estimate &#8377;</label><input name="profit_estimate" type="text" value="&#8377;0" readonly></div>
                 <div class="field"><label>Fulfilment mapping</label><select name="fulfilment_status"><option value="planned">Planned</option><option value="mapped">Mapped</option><option value="ready">Ready</option><option value="paused">Paused</option></select></div>
-                <div class="field field-full"><label>External / fulfilment URL</label><input name="external_url" type="url" placeholder="Optional internal reference"></div>
+
               </div>
-              <div class="checkbox-row"><label><input name="is_published" type="checkbox" checked> Published</label><label><input name="is_featured" type="checkbox"> Featured fallback</label><label><input name="is_home_pinned" type="checkbox"> Pin to homepage</label></div>
+              <div class="checkbox-row"><label><input name="is_published" type="checkbox"> Published</label><label><input name="is_featured" type="checkbox"> Featured fallback</label><label><input name="is_home_pinned" type="checkbox"> Pin to homepage</label></div>
               <div class="button-row"><button class="primary" type="submit">Save product</button><button id="productReset" type="button">Clear</button></div>
               <small class="form-message" aria-live="polite"></small>
             </form>
@@ -134,7 +134,7 @@
               <input type="hidden" name="id">
               <h2 id="couponFormTitle">Create coupon</h2>
               <div class="form-grid">
-                <div class="field"><label>Coupon code</label><input name="code" maxlength="40" placeholder="LAUNCH20" required></div>
+                <div class="field"><label>Coupon code</label><input name="code" maxlength="40" placeholder="APPROVED_CODE" required></div>
                 <div class="field"><label>Customer-facing label</label><input name="label" maxlength="160" placeholder="Launch offer: 20% off"></div>
                 <div class="field"><label>Discount type</label><select name="discount_type"><option value="percentage">Percentage off</option><option value="fixed">Fixed rupees off</option></select></div>
                 <div class="field"><label>Discount value</label><input name="discount_value" type="number" min="0.01" step="0.01" required placeholder="20"></div>
@@ -215,7 +215,7 @@
                   <span class="upload-note">Tick existing uploaded products to group them. This does not move/delete products from shop; it only connects them to this collection.</span>
                 </div>
               </div>
-              <div class="checkbox-row"><label><input name="is_published" type="checkbox" checked> Published</label><label><input name="is_featured" type="checkbox"> Featured collection</label></div>
+              <div class="checkbox-row"><label><input name="is_published" type="checkbox"> Published</label><label><input name="is_featured" type="checkbox"> Featured collection</label></div>
               <div class="button-row"><button class="primary" type="submit">Save collection</button><button id="collectionReset" type="button">Clear</button></div>
               <small class="form-message"></small>
             </form>
@@ -242,7 +242,7 @@
                 <div class="field product-gallery-upload"><label>Upload chart image</label><input name="chart_file" type="file" accept="image/jpeg,image/png,image/webp"><span class="upload-note">Use a clean JPG/PNG/WebP. Re-uploading replaces the chart image URL.</span></div>
                 <div class="field field-full"><label>Fit facts / notes</label><textarea name="facts" placeholder="One note per line"></textarea></div>
               </div>
-              <div class="checkbox-row"><label><input name="is_published" type="checkbox" checked> Published</label></div>
+              <div class="checkbox-row"><label><input name="is_published" type="checkbox"> Published</label></div>
               <div class="button-row"><button class="primary" type="submit">Save chart</button><button id="sizeChartReset" type="button">Clear</button></div>
               <small class="form-message"></small>
             </form>
@@ -267,18 +267,17 @@
         <section class="admin-panel" data-admin-panel="data">
           <div class="admin-heading"><div><p class="eyebrow">Portable data</p><h1>Export / import.</h1></div></div>
           <div class="admin-grid">
-            <div class="admin-card"><h2>Back up data</h2><p>Download catalogue, collection and site snapshots.</p><div class="button-row"><button class="primary" id="exportProducts" type="button">Export products.js</button><button id="exportSite" type="button">Export site-data.js</button><button id="exportJson" type="button">Export all JSON</button></div><hr style="border-color:var(--line);margin:2rem 0"><h2>Clear browser cache</h2><button class="danger" id="clearLocalData" type="button">Clear local data</button></div>
+            <div class="admin-card"><h2>Back up data</h2><p>Public products.js excludes supplier metadata. The private JSON backup contains supplier mappings; keep it private.</p><div class="button-row"><button class="primary" id="exportProducts" type="button">Export products.js</button><button id="exportSite" type="button">Export site-data.js</button><button id="exportJson" type="button">Export private catalogue backup</button></div><hr style="border-color:var(--line);margin:2rem 0"><h2>Clear browser cache</h2><button class="danger" id="clearLocalData" type="button">Clear local data</button></div>
             <form class="admin-card" id="importForm"><h2>Import JSON</h2><textarea class="json-box" id="importJson" required></textarea><div class="button-row"><button class="primary" type="submit">Import data</button></div><small class="form-message"></small></form>
           </div>
         </section>
       </main>
     </div>
   </div>
-  <script src="site-data.js?v=20260718-coupon-studio" defer></script>
+  <script src="site-data.js?v=20260925-phase1" defer></script>
   <script src="products.js?v=20260718-coupon-studio" defer></script>
-  <script src="supabase-config.js?v=20260718-coupon-studio" defer></script>
-  <script src="admin.js?v=20260718-coupon-studio" defer></script>
+  <script src="supabase-config.js?v=20260925-phase1" defer></script>
+  <script src="commerce-client.js?v=20260925-phase1" defer></script>
+  <script src="admin.js?v=20260925-phase1" defer></script>
 </body>
 </html>
-
-

@@ -35,8 +35,8 @@
     currency: 'INR',
     maximumFractionDigits: 0
   }).format(Number(value) || 0);
-  const safeImage = (value = '') => /^(https?:\/\/[^\s"'<>]+|data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+|[a-z0-9_.-]+\.(?:png|jpe?g|webp|gif|svg)(?:[?#].*)?)$/i.test(String(value).trim()) ? String(value).trim() : '';
-  const safeLink = (value = '') => /^(https?:\/\/|[a-z0-9_.-]+\.html(?:[?#].*)?|#[a-z0-9_-]+)$/i.test(String(value).trim()) ? String(value).trim() : '';
+  const safeImage = window.VeyrathAPI.safeImage;
+  const safeLink = window.VeyrathAPI.safeLink;
   const split = (value) => Array.isArray(value) ? value : String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
   const productImages = (product = {}) => [...new Set([
     product.image_url,
@@ -57,24 +57,19 @@
   let supabaseClient = null;
   let remoteConfigured = false;
 
-  const products = () => (Array.isArray(remoteProducts)
-    ? remoteProducts
-    : remoteConfigured
-      ? []
-      : read(KEYS.products, window.VEYRATH_PRODUCTS || []))
-    .filter((product) => product && product.is_published !== false);
-  const site = () => remoteSite || read(KEYS.site, window.VEYRATH_SITE_DATA || {});
+  const products = () => (remoteProducts || []).filter((p) => p.is_published && !p.archived_at);
+  const site = () => remoteSite || clone(window.VEYRATH_SITE_DATA || {});
   const sizeCharts = () => (Array.isArray(remoteSizeCharts)
     ? remoteSizeCharts
-    : read(KEYS.sizeCharts, window.VEYRATH_SIZE_CHARTS || []))
+    : (window.VEYRATH_SIZE_CHARTS || []))
     .filter((chart) => chart && chart.is_published !== false);
   const collections = () => (Array.isArray(remoteCollections)
     ? remoteCollections
-    : read(KEYS.collections, window.VEYRATH_COLLECTIONS || []))
+    : (window.VEYRATH_COLLECTIONS || []))
     .filter((collection) => collection && collection.is_published !== false);
   const collectionProducts = () => Array.isArray(remoteCollectionProducts)
     ? remoteCollectionProducts
-    : read(KEYS.collectionProducts, window.VEYRATH_COLLECTION_PRODUCTS || []);
+    : (window.VEYRATH_COLLECTION_PRODUCTS || []);
   const couponOffers = () => Array.isArray(remoteCouponOffers) ? remoteCouponOffers : [];
   const offerForProduct = (productId) => {
     const offers = couponOffers();
@@ -104,7 +99,7 @@
 
   async function connectRemote() {
     const config = window.VEYRATH_SUPABASE || {};
-    if (!/^https:\/\//.test(config.url || '') || !config.anonKey || config.anonKey.includes('YOUR_')) return;
+    if (!window.VeyrathAPI.configured()) return;
     remoteConfigured = true;
 
     try {
@@ -118,7 +113,7 @@
       try {
         await new Promise((resolve, reject) => {
           const script = document.createElement('script');
-          script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+          script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4';
           script.onload = resolve;
           script.onerror = reject;
           document.head.appendChild(script);
@@ -134,14 +129,14 @@
     }
 
     try {
-      supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+      supabaseClient = await window.VeyrathAPI.client();
       const requests = [
         supabaseClient.from('site_settings').select('value').eq('key', 'site_data').maybeSingle(),
         supabaseClient.from('hero_slides').select('*').eq('is_published', true).order('sort_order'),
         supabaseClient.from('size_charts').select('*').eq('is_published', true).order('sort_order'),
         supabaseClient.from('collections').select('*').eq('is_published', true).order('sort_order'),
         supabaseClient.from('collection_products').select('collection_id,product_id,sort_order').order('sort_order'),
-        supabaseClient.from('public_coupon_offers').select('*').order('auto_apply', { ascending: false }).order('created_at', { ascending: false })
+        supabaseClient.from('public_coupon_offers').select('*').order('auto_apply', { ascending: false }).order('code')
       ];
       if (!Array.isArray(remoteProducts)) {
         requests.push(supabaseClient.from('storefront_products').select('*').order('sort_order', { ascending: false }));
@@ -153,7 +148,7 @@
         write(KEYS.products, remoteProducts);
       }
 
-      const base = read(KEYS.site, window.VEYRATH_SITE_DATA || {});
+      const base = clone(window.VEYRATH_SITE_DATA || {});
       remoteSite = settings.data?.value ? { ...base, ...settings.data.value } : base;
       if (!slides.error && slides.data?.length) {
         remoteSite.banners = slides.data.map((slide) => ({
@@ -308,12 +303,13 @@
           <div class="price"><strong>${money(price)}</strong>${compare > price ? `<s>${money(compare)}</s>` : ''}</div>
           ${offer ? `<p class="product-promo-note">${esc(offer.label || offerLabel(offer))} · ${esc(offer.code)} at checkout</p>` : ''}
           ${tags.length ? `<ul>${tags.map((tag) => `<li>${esc(tag)}</li>`).join('')}</ul>` : ''}
-          <div class="product-actions"><button type="button" data-product-view="${esc(product.id)}">Details</button><button type="button" data-buy-now="${esc(product.id)}">Buy now</button></div>
+          <div class="product-actions"><button type="button" data-product-view="${esc(product.id)}">Details</button><button type="button" data-buy-now="${esc(product.id)}" ${product.checkout_ready ? '' : 'disabled'}>${product.checkout_ready ? 'Buy now' : 'Unavailable'}</button></div>
         </div>
       </article>`;
   }
 
-  function emptyState(heading = 'The next VEYRATH pieces are being prepared after dark.', copy = 'Join the Inner Circle to know when the signal goes live.') {
+  function emptyState(heading = 'The next VEYRATH pieces are being prepared after dark.', copy = 'Check back for new releases.') {
+    if (!remoteConfigured || !supabaseClient) { heading = 'The store is temporarily unavailable.'; copy = 'Please try again later. Checkout and forms need a secure connection.'; }
     return `<div class="empty-state"><span class="orbit-mark" aria-hidden="true"></span><p class="eyebrow">Drop in progress</p><h2>${esc(heading)}</h2><p>${esc(copy)}</p><a class="btn btn-gold" href="#inner-circle">Join the circle</a></div>`;
   }
 
@@ -375,7 +371,7 @@
           </dl>
           ${collectionSwitcher(product)}
           <div class="modal-actions">
-            <button class="btn btn-gold" type="button" data-buy-now="${esc(product.id)}">Buy securely</button>
+            <button class="btn btn-gold" type="button" data-buy-now="${esc(product.id)}" ${product.checkout_ready ? '' : 'disabled'}>${product.checkout_ready ? 'Buy securely' : 'Temporarily unavailable'}</button>
             <a class="btn btn-ghost" href="size-charts.html">Size guide</a>
           </div>
           <small>${allGallery.length > MAX_MODAL_GALLERY_IMAGES ? `Showing the ${MAX_MODAL_GALLERY_IMAGES} key views for a faster, calmer gallery. ` : ''}Payment protected by Razorpay.</small>
@@ -747,16 +743,7 @@
       event.preventDefault();
       const email = new FormData(form).get('email').trim().toLowerCase();
       try {
-        if (supabaseClient) {
-          const { error } = await supabaseClient.from('newsletter_signups').insert({ email, source: location.pathname || 'website' });
-          if (error && error.code !== '23505') throw error;
-        } else {
-          const entries = read(KEYS.newsletter, []);
-          if (!entries.some((entry) => entry.email === email)) {
-            entries.unshift({ id: crypto.randomUUID(), email, created_at: new Date().toISOString() });
-            write(KEYS.newsletter, entries);
-          }
-        }
+        await window.VeyrathAPI.invoke('create-checkout', { action: 'newsletter', data: { email, source: location.pathname || 'website' } });
         form.reset();
         $('.form-message', form).textContent = 'You are inside the circle.';
         window.VeyrathAnalytics?.track?.('generate_lead', { source: location.pathname || 'website' });
@@ -766,59 +753,12 @@
       }
     }));
 
-    $('#trackOrderForm')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const result = $('#trackOrderResult');
-      const submit = $('button[type="submit"]', form);
-      const orderNumber = String(form.elements.order_number.value || '').trim().toUpperCase();
-      const email = String(form.elements.email.value || '').trim().toLowerCase();
-      if (!orderNumber || !email) return;
-      if (!supabaseClient) {
-        result.textContent = 'Order tracking is temporarily unavailable. Please contact support.';
-        result.dataset.tone = 'error';
-        return;
-      }
-      submit.disabled = true;
-      result.textContent = 'Finding your signal…';
-      result.dataset.tone = 'loading';
-      try {
-        const { data, error } = await supabaseClient.rpc('track_order', { p_order_number: orderNumber, p_email: email });
-        if (error) throw error;
-        if (!data?.found) throw new Error('We could not match that order number and email. Check your confirmation email and try again.');
-        const stages = {
-          pending_payment: 'Payment pending',
-          paid: 'Payment confirmed',
-          processing: 'In production',
-          fulfilled: 'Delivered',
-          cancelled: 'Cancelled'
-        };
-        const current = stages[data.order_status] || data.display_status || 'Order received';
-        const tracking = data.tracking_url ? `<a href="${esc(safeLink(data.tracking_url))}" target="_blank" rel="noopener">Track shipment ↗</a>` : (data.tracking_number ? `<span>${esc(data.courier_name || 'Courier')} · ${esc(data.tracking_number)}</span>` : '<span>Tracking appears once your order is dispatched.</span>');
-        result.innerHTML = `<strong>${esc(data.order_number)} · ${esc(current)}</strong><small>${esc(data.display_status || 'Your VEYRATH order is moving through the next stage.')}</small>${tracking}`;
-        result.dataset.tone = 'success';
-        window.VeyrathAnalytics?.track?.('track_order', { order_number: data.order_number });
-      } catch (error) {
-        result.textContent = error.message || 'We could not find that order right now.';
-        result.dataset.tone = 'error';
-      } finally {
-        submit.disabled = false;
-      }
-    });
-
     $('#contactForm')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
       const payload = Object.fromEntries(new FormData(form));
       try {
-        if (supabaseClient) {
-          const { error } = await supabaseClient.from('inquiries').insert(payload);
-          if (error) throw error;
-        } else {
-          const list = read(KEYS.inquiries, []);
-          list.unshift({ id: crypto.randomUUID(), ...payload, status: 'new', created_at: new Date().toISOString() });
-          write(KEYS.inquiries, list);
-        }
+        await window.VeyrathAPI.invoke('create-checkout', { action: 'inquiry', data: payload });
         form.reset();
         $('.form-message', form).textContent = 'Signal received. We will reply soon.';
         toast('Your message reached VEYRATH.');

@@ -22,12 +22,12 @@
     maximumFractionDigits: 0
   }).format(Number(value) || 0);
   const slugify = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const safeImage = (value = '') => /^(https?:\/\/[^\s"'<>]+|data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+|[a-z0-9_.-]+\.(?:png|jpe?g|webp|gif|svg)(?:[?#].*)?)$/i.test(String(value).trim()) ? String(value).trim() : '';
+  const safeImage = window.VeyrathAPI.safeImage;
   const galleryOf = (product = {}) => [...new Set([product.image_url, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean))];
   const productPrice = (product = {}) => Number(product.sale_price || product.selling_price || product.price || 0);
 
   const config = window.VEYRATH_SUPABASE || {};
-  const configured = Boolean(/^https:\/\//.test(config.url || '') && config.anonKey && !config.anonKey.includes('YOUR_'));
+  const configured = window.VeyrathAPI.configured();
   const projectRef = (() => {
     try { return new URL(config.url).hostname.split('.')[0]; } catch (_) { return ''; }
   })();
@@ -99,7 +99,7 @@
     if (!window.supabase) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4';
         script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);
@@ -133,7 +133,7 @@
     }
     if (!(await isAdmin())) {
       await client.auth.signOut();
-      return message(form, 'Login worked, but this user is not an active VEYRATH admin. Run admin-access.sql in this project.');
+      return message(form, 'Login worked, but this user is not an active VEYRATH admin. Ask the operator to verify active membership using BACKEND-BOOTSTRAP.md.');
     }
     $('#adminPassword').value = '';
     await openApp();
@@ -161,7 +161,7 @@
     status('Refreshing secure data…');
     const [catalogue, orderData, settings, slides, inbox, audience, chartRows, collectionRows, membershipRows, couponRows] = await Promise.all([
       client.from('admin_products').select('*').order('sort_order', { ascending: false }),
-      client.from('orders').select('*,order_items(*)').order('created_at', { ascending: false }).limit(500),
+      client.from('orders').select('*,order_items(*),fulfilment_jobs(*),payment_attempts(*),order_notification_logs(*)').order('created_at', { ascending: false }).limit(500),
       client.from('site_settings').select('value').eq('key', 'site_data').maybeSingle(),
       client.from('hero_slides').select('*').order('sort_order'),
       client.from('inquiries').select('*').order('created_at', { ascending: false }).limit(250),
@@ -180,7 +180,7 @@
 
     const featureErrors = [chartRows, collectionRows, membershipRows, couponRows].filter((result) => result.error).map((result) => result.error);
     featureSchemaReady = featureErrors.length === 0;
-    products = catalogue.data || [];
+    products = (catalogue.data || []).filter(p => !p.archived_at);
     orders = orderData.data || [];
     inquiries = inbox.data || [];
     newsletter = audience.data || [];
@@ -201,22 +201,25 @@
     }
     renderAll();
     if (!featureSchemaReady) {
-      status('Run the required feature SQL upgrades once to enable every admin module, including coupons.', 'error');
+      status('Schema validation failed. Use the clean migrations in a disposable environment; see BACKEND-BOOTSTRAP.md.', 'error');
       return;
     }
+    const commerce = await client.from('site_settings').select('value').eq('key', 'commerce').single();
+    if (commerce.error) throw commerce.error;
+    $('#commerceStatus').textContent = `${String(commerce.data.value.payment_mode).toUpperCase()} · Checkout ${commerce.data.value.checkout_enabled ? 'ON' : 'OFF'} · Auto fulfilment ${commerce.data.value.auto_fulfilment ? 'ON' : 'OFF'} · Email queue delivery ${commerce.data.value.notifications_enabled ? 'ON' : 'OFF'}`;
     status(`Updated ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}.`);
   }
 
   function profit(product) {
     const selling = Number(product.selling_price) > 0 ? Number(product.selling_price) : Number(product.price);
-    return selling - Number(product.base_cost || 0) - Number(product.shipping_cost || 0);
+    return selling - Number(product.base_cost || 0) - Number(product.supplier_shipping_cost || 0);
   }
 
   function renderProducts() {
     $('#productsTable').innerHTML = products.map((product) => {
       const gallery = galleryOf(product);
       const collectionCount = collectionProducts.filter((item) => String(item.product_id) === String(product.id)).length;
-      return `<tr><td><img src="${esc(gallery[0] || product.front_design_url || 'veyrath-tee.jpg')}" alt=""></td><td><strong>${esc(product.name)}</strong><br><small>${esc(product.category)} · ${product.is_published ? 'Published' : 'Draft'} · ${gallery.length} image${gallery.length === 1 ? '' : 's'}</small></td><td>${money(Number(product.selling_price) || product.price)}<br><small>Profit ${money(profit(product))}</small></td><td><span class="status-pill ${product.is_home_pinned ? 'status-ready' : 'status-planned'}">${product.is_home_pinned ? 'Home pinned' : 'Not pinned'}</span><br><small>${collectionCount} collection${collectionCount === 1 ? '' : 's'} · order ${Number(product.home_sort_order || 0)}</small></td><td><div class="table-buttons"><button type="button" data-edit-product="${product.id}" aria-label="Edit ${esc(product.name)}">Edit</button><button type="button" data-toggle-product="${product.id}">${product.is_published ? 'Draft' : 'Publish'}</button><button class="danger" type="button" data-delete-product="${product.id}">Delete</button></div></td></tr>`;
+      return `<tr><td><img src="${esc(gallery[0] || 'veyrath-tee.jpg')}" alt=""></td><td><strong>${esc(product.name)}</strong><br><small>${esc(product.category)} · ${product.is_published ? 'Published' : 'Draft'} · ${gallery.length} image${gallery.length === 1 ? '' : 's'}</small></td><td>${money(Number(product.selling_price) || product.price)}<br><small>Profit ${money(profit(product))}</small></td><td><span class="status-pill ${product.is_home_pinned ? 'status-ready' : 'status-planned'}">${product.is_home_pinned ? 'Home pinned' : 'Not pinned'}</span><br><small>${collectionCount} collection${collectionCount === 1 ? '' : 's'} · order ${Number(product.home_sort_order || 0)}</small></td><td><div class="table-buttons"><button type="button" data-edit-product="${product.id}" aria-label="Edit ${esc(product.name)}">Edit</button><button type="button" data-toggle-product="${product.id}">${product.is_published ? 'Draft' : 'Publish'}</button><button class="danger" type="button" data-delete-product="${product.id}">Archive</button></div></td></tr>`;
     }).join('') || '<tr><td colspan="5">No products yet.</td></tr>';
   }
 
@@ -243,11 +246,11 @@
     const form = $('#productForm');
     form.reset();
     form.elements.id.value = '';
-    form.elements.rating.value = '4.5';
+    form.elements.rating.value = '0';
     form.elements.sort_order.value = '0';
     form.elements.home_sort_order.value = '0';
     form.elements.profit_estimate.value = '₹0';
-    form.elements.is_published.checked = true;
+    form.elements.is_published.checked = false;
     form.elements.is_featured.checked = false;
     form.elements.is_home_pinned.checked = false;
     $('#productGalleryStatus').textContent = 'No new files selected.';
@@ -258,7 +261,7 @@
   function updateProfit() {
     const form = $('#productForm');
     const selling = Number(form.elements.selling_price.value) || Number(form.elements.price.value);
-    form.elements.profit_estimate.value = money(selling - Number(form.elements.base_cost.value || 0) - Number(form.elements.shipping_cost.value || 0));
+    form.elements.profit_estimate.value = money(selling - Number(form.elements.base_cost.value || 0) - Number(form.elements.supplier_shipping_cost.value || 0));
   }
 
   function compressedImage(file) {
@@ -299,9 +302,9 @@
         message(form, `Preparing and uploading image ${index + 1} of ${files.length}…`);
         const blob = await compressedImage(files[index]);
         const fileSlug = slugify(files[index].name.replace(/\.[^.]+$/, '')).slice(0, 55) || `image-${index + 1}`;
-        const path = `${productId}/${stamp}-${String(index + 1).padStart(2, '0')}-${slug}-${fileSlug}.webp`;
+        const path = `public/${productId}/${stamp}-${String(index + 1).padStart(2, '0')}-${slug}-${fileSlug}.webp`;
         const { error } = await bucket.upload(path, blob, { contentType: 'image/webp', cacheControl: '31536000', upsert: false });
-        if (error) throw new Error(`${error.message}. Run product-gallery-migration.sql once in this Supabase project.`);
+        if (error) throw new Error(`${error.message}. Check local Storage configuration.`);
         const { data } = bucket.getPublicUrl(path);
         uploaded.push(data.publicUrl);
         newPaths.push(path);
@@ -310,10 +313,7 @@
       if (newPaths.length) await bucket.remove(newPaths);
       throw error;
     }
-    const { data: oldFiles } = await bucket.list(productId, { limit: 100 });
-    const stale = (oldFiles || []).map((item) => `${productId}/${item.name}`).filter((path) => !newPaths.includes(path));
-    if (stale.length) await bucket.remove(stale);
-    return uploaded;
+    return uploaded; // Previous objects remain until database save succeeds.
   }
 
   async function uploadSingleImage(file, folder, ownerId, slug, form, label) {
@@ -322,9 +322,9 @@
     message(form, `Uploading ${label} image…`);
     const blob = await compressedImage(file);
     const fileSlug = slugify(file.name.replace(/\.[^.]+$/, '')).slice(0, 55) || label;
-    const path = `${folder}/${ownerId}/${Date.now()}-${slug}-${fileSlug}.webp`;
+    const path = `public/${folder}/${ownerId}/${Date.now()}-${slug}-${fileSlug}.webp`;
     const { error } = await bucket.upload(path, blob, { contentType: 'image/webp', cacheControl: '31536000', upsert: false });
-    if (error) throw new Error(`${error.message}. Make sure product-gallery-migration.sql has been run.`);
+    if (error) throw new Error(`${error.message}. Check local Storage configuration.`);
     const { data } = bucket.getPublicUrl(path);
     return data.publicUrl;
   }
@@ -376,7 +376,6 @@
         colours: split(raw.colours),
         tags: split(raw.tags),
         style: split(raw.tags),
-        rating: Number(raw.rating || 0),
         sort_order: Number(raw.sort_order || 0),
         home_sort_order: Number(raw.home_sort_order || 0),
         images: gallery,
@@ -388,18 +387,19 @@
         printrove_variant_id: raw.printrove_variant_id.trim(),
         printrove_variant_map: variantMap,
         printrove_product_type: raw.printrove_product_type.trim(),
-        print_type: raw.print_type.trim(),
+        printrove_print_type: raw.printrove_print_type.trim(),
         base_cost: base,
         shipping_cost: shipping,
-        profit_margin: (selling || Number(raw.price)) - base - shipping,
+        supplier_shipping_cost: Number(raw.supplier_shipping_cost || 0),
         fulfilment_status: raw.fulfilment_status,
-        external_url: raw.external_url.trim(),
         is_published: form.elements.is_published.checked,
         is_featured: form.elements.is_featured.checked,
         is_home_pinned: form.elements.is_home_pinned.checked
       };
-      const { error } = await client.from('products').upsert(payload);
+      const { error } = await client.rpc('admin_save_product', { p_product: payload });
       if (error) throw error;
+      const stale = existingGallery.filter(url => !gallery.includes(url)).map(assetPath).filter(Boolean);
+      if (stale.length) { const cleanup = await client.storage.from('product-images').remove(stale); if (cleanup.error) console.warn('Old assets retained for later cleanup.'); }
       resetProduct();
       await loadAll();
       message(form, 'Product saved to Supabase.');
@@ -408,10 +408,14 @@
     }
   }
 
+  function assetPath(value) {
+    try { const u = new URL(value); const base = new URL(config.url); const prefix = '/storage/v1/object/public/product-images/'; return u.origin === base.origin && u.pathname.startsWith(prefix + 'public/') ? decodeURIComponent(u.pathname.slice(prefix.length)) : ''; } catch (_) { return ''; }
+  }
+
   function orderVisible(order, filter) {
     if (filter === 'paid') return order.payment_status === 'paid';
     if (filter === 'pending') return order.payment_status === 'pending';
-    if (filter === 'printrove_failed') return order.fulfilment_status === 'printrove_failed';
+    if (filter === 'action_required') return ['action_required','reconciliation_required'].includes(order.fulfilment_status);
     if (filter === 'admin_hold') return order.admin_hold;
     return true;
   }
@@ -420,11 +424,7 @@
     return products.find((product) => String(product.id) === String(productId))?.name || 'Selected product';
   }
 
-  function couponDateValue(value) {
-    if (!value) return '';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
-  }
+  const couponDateValue = window.VeyrathAPI.localDate;
 
   function syncCouponTarget() {
     const form = $('#couponForm');
@@ -459,8 +459,8 @@
       const target = coupon.scope === 'product' ? couponProductLabel(coupon.product_id) : 'Entire order';
       const access = coupon.customer_email ? `Private · ${coupon.customer_email}` : coupon.is_public ? 'Public website' : 'Private code';
       const windowText = [coupon.starts_at ? `Starts ${new Date(coupon.starts_at).toLocaleDateString('en-IN')}` : '', coupon.ends_at ? `Ends ${new Date(coupon.ends_at).toLocaleDateString('en-IN')}` : ''].filter(Boolean).join(' · ');
-      return `<tr><td><strong>${esc(coupon.code)}</strong><br><small>${esc(coupon.label || '')}</small></td><td><strong>${esc(amount)}</strong>${coupon.auto_apply ? '<br><small>Auto-applies</small>' : ''}</td><td>${esc(target)}${Number(coupon.minimum_order_amount || 0) ? `<br><small>Min ${money(coupon.minimum_order_amount)}</small>` : ''}</td><td><span class="status-pill status-${coupon.is_active ? 'paid' : 'pending'}">${coupon.is_active ? 'active' : 'paused'}</span><br><small>${esc(access)}</small>${windowText ? `<br><small>${esc(windowText)}</small>` : ''}</td><td>${Number(coupon.used_count || 0)}${coupon.usage_limit ? ` / ${Number(coupon.usage_limit)}` : ''}</td><td><div class="order-actions"><button type="button" data-edit-coupon="${coupon.id}">Edit</button><button type="button" data-toggle-coupon="${coupon.id}">${coupon.is_active ? 'Pause' : 'Activate'}</button><button class="danger" type="button" data-delete-coupon="${coupon.id}">Delete</button></div></td></tr>`;
-    }).join('') || '<tr><td colspan="6">No coupons yet. Create a public launch offer above.</td></tr>';
+      return `<tr><td><strong>${esc(coupon.code)}</strong><br><small>${esc(coupon.label || '')}</small></td><td><strong>${esc(amount)}</strong>${coupon.auto_apply ? '<br><small>Auto-applies</small>' : ''}</td><td>${esc(target)}${Number(coupon.minimum_order_amount || 0) ? `<br><small>Min ${money(coupon.minimum_order_amount)}</small>` : ''}</td><td><span class="status-pill status-${coupon.is_active ? 'paid' : 'pending'}">${coupon.is_active ? 'active' : 'paused'}</span><br><small>${esc(access)}</small>${windowText ? `<br><small>${esc(windowText)}</small>` : ''}</td><td>${Number(coupon.used_count || 0)}${coupon.usage_limit ? ` / ${Number(coupon.usage_limit)}` : ''}</td><td><div class="order-actions"><button type="button" data-edit-coupon="${coupon.id}">Edit</button><button type="button" data-toggle-coupon="${coupon.id}">${coupon.is_active ? 'Pause' : 'Activate'}</button><button class="danger" type="button" data-delete-coupon="${coupon.id}">Archive</button></div></td></tr>`;
+    }).join('') || '<tr><td colspan="6">No coupons yet. Create an approved offer above.</td></tr>';
     syncCouponTarget();
   }
 
@@ -508,6 +508,8 @@
       is_public: customerEmail ? false : form.elements.is_public.checked, auto_apply: customerEmail ? false : form.elements.auto_apply.checked
     };
     if (payload.discount_value <= 0 || (payload.discount_type === 'percentage' && payload.discount_value > 100)) return message(form, 'Use a discount above zero and no more than 100% for percentage offers.');
+    if (!payload.is_public && !payload.customer_email) return message(form, 'Private offers require a customer email.');
+    if (payload.starts_at && payload.ends_at && payload.ends_at <= payload.starts_at) return message(form, 'End time must be after start time. Dates use your local timezone.');
     message(form, 'Saving coupon...');
     try {
       const { error } = await client.from('coupons').upsert(payload);
@@ -527,8 +529,8 @@
     const coupon = coupons.find((item) => String(item.id) === String(couponId));
     if (!coupon) return;
     if (remove) {
-      if (!confirm(`Delete coupon ${coupon.code}? This cannot be used for new orders.`)) return;
-      const { error } = await client.from('coupons').delete().eq('id', coupon.id);
+      if (!confirm(`Archive coupon ${coupon.code}? Existing reservations remain valid.`)) return;
+      const { error } = await client.from('coupons').update({ is_active: false }).eq('id', coupon.id);
       if (error) return alert(error.message);
     }
     if (toggle) {
@@ -543,10 +545,12 @@
     const visible = orders.filter((order) => orderVisible(order, filter));
     $('#ordersTable').innerHTML = visible.map((order) => {
       const items = (order.order_items || []).map((item) => `${item.quantity}× ${esc(item.product_name)} <small>${esc(item.colour)} / ${esc(item.size)}</small>`).join('<br>');
-      const canSend = order.payment_status === 'paid' && !order.admin_hold && ['not_sent', 'printrove_failed'].includes(order.fulfilment_status);
+      const job = Array.isArray(order.fulfilment_jobs) ? order.fulfilment_jobs[0] : order.fulfilment_jobs;
+      const attempt = Array.isArray(order.payment_attempts) ? order.payment_attempts[0] : order.payment_attempts;
+      const canSend = order.payment_mode === 'live' && order.payment_status === 'paid' && !order.admin_hold && !order.printrove_order_id && ['queued','retry'].includes(job?.state);
       const trackingDetails = order.tracking_number ? `<br><small>${esc(order.courier_name || 'Courier')}: ${esc(order.tracking_number)}</small>` : '';
       const trackingButton = order.payment_status === 'paid' ? `<button type="button" data-edit-tracking="${order.id}">Update tracking</button>` : '';
-      return `<tr><td><strong>${esc(order.order_number)}</strong><br><small>${new Date(order.created_at).toLocaleString('en-IN')}</small></td><td><strong>${esc(order.customer_name)}</strong><br><small>${esc(order.customer_phone)} · ${esc(order.customer_email)}</small><br><small>${esc([order.address_line1, order.address_line2, order.city, order.state, order.pincode].filter(Boolean).join(', '))}</small></td><td>${items || 'No items'}</td><td><span class="status-pill status-${esc(order.payment_status)}">${esc(order.payment_status)}</span>${order.razorpay_payment_id ? `<br><small>${esc(order.razorpay_payment_id)}</small>` : ''}</td><td><span class="status-pill status-${esc(order.fulfilment_status)}">${esc(order.fulfilment_status)}</span>${order.printrove_order_id ? `<br><small>ID ${esc(order.printrove_order_id)} · ${esc(order.printrove_status || '')}</small>` : ''}${trackingDetails}${order.admin_hold ? '<br><span class="hold-note">Manual hold</span>' : ''}</td><td><strong>${money(order.total_amount)}</strong><br><small>Shipping ${money(order.shipping_amount)}</small></td><td><div class="order-actions">${canSend ? `<button class="primary" type="button" data-send-printrove="${order.id}">${order.fulfilment_status === 'printrove_failed' ? 'Retry Printrove' : 'Send to Printrove'}</button>` : ''}${order.printrove_order_id ? `<button type="button" data-sync-printrove="${order.id}">Sync status</button>` : ''}${trackingButton}<button type="button" data-toggle-hold="${order.id}">${order.admin_hold ? 'Release hold' : 'Mark issue / hold'}</button></div></td></tr>`;
+      return `<tr><td><strong>${esc(order.order_number)}</strong><br><small>${new Date(order.created_at).toLocaleString('en-IN')}</small></td><td><strong>${esc(order.customer_name)}</strong><br><small>${esc(order.customer_phone)} · ${esc(order.customer_email)}</small><br><small>${esc([order.address_line1, order.address_line2, order.city, order.state, order.pincode].filter(Boolean).join(', '))}</small></td><td>${items || 'No items'}</td><td><span class="status-pill status-${esc(order.payment_status)}">${esc(order.payment_status)} · ${esc(order.payment_mode)}</span><br><small>Attempt: ${esc(attempt?.state || 'none')}</small>${order.razorpay_payment_id ? `<br><small>${esc(order.razorpay_payment_id)}</small>` : ''}</td><td><span class="status-pill status-${esc(order.fulfilment_status)}">${esc(order.fulfilment_status)}</span><br><small>Job: ${esc(job?.state || 'none')} · Attempts ${Number(job?.attempt_count || 0)}<br>${esc(job?.last_error || '')}</small><br><small>Notifications: ${esc((order.order_notification_logs || []).map(n => `${n.kind}: ${n.status}`).join(', '))}</small>${order.printrove_order_id ? `<br><small>ID ${esc(order.printrove_order_id)} · ${esc(order.printrove_status || '')}</small>` : ''}${trackingDetails}${order.admin_hold ? '<br><span class="hold-note">Manual hold</span>' : ''}</td><td><strong>${money(order.total_amount)}</strong><br><small>Shipping ${money(order.shipping_amount)}</small></td><td><div class="order-actions">${canSend ? `<button class="primary" type="button" data-send-printrove="${order.id}">${order.fulfilment_status === 'printrove_failed' ? 'Retry Printrove' : 'Send to Printrove'}</button>` : ''}${order.printrove_order_id ? `<button type="button" data-sync-printrove="${order.id}">Sync status</button>` : ''}${trackingButton}${job?.state === 'action_required' ? `<button type="button" data-retry-wallet="${order.id}">Wallet resolved: allow retry</button>` : ''}${job?.state === 'uncertain' ? `<button type="button" data-reconcile-supplier="${order.id}">Reconcile existing supplier order</button>` : ''}${attempt?.state === 'uncertain' ? `<button type="button" data-reconcile-payment="${order.id}">Reconcile provider payment order</button>` : ''}<button type="button" data-toggle-hold="${order.id}">${order.admin_hold ? 'Release hold' : 'Mark issue / hold'}</button></div></td></tr>`;
     }).join('') || '<tr><td colspan="7">No orders match this filter.</td></tr>';
   }
 
@@ -568,6 +572,22 @@
   }
 
   async function orderAction(event) {
+    const wallet = event.target.closest('[data-retry-wallet]');
+    const supplier = event.target.closest('[data-reconcile-supplier]');
+    const payment = event.target.closest('[data-reconcile-payment]');
+    if (wallet || supplier || payment) {
+      try {
+        if (wallet) {
+          if (!confirm('Confirm the wallet issue is resolved. This only permits a new claim for a definite rejected creation.')) return;
+          const { error } = await client.rpc('admin_retry_wallet', { p_order_id: wallet.dataset.retryWallet }); if (error) throw error;
+        } else {
+          const providerId = prompt('Enter the EXISTING provider order ID found by the VEYRATH order reference. This attaches an order; it never creates one.'); if (!providerId) return;
+          const { data, error } = await client.functions.invoke(supplier ? 'send-to-printrove' : 'create-razorpay-order', { body: { action:'reconcile', order_id:supplier?.dataset.reconcileSupplier || payment?.dataset.reconcilePayment, provider_order_id:providerId.trim() } });
+          if (error || !data?.reconciled) throw new Error('Reconciliation failed. Verify the provider reference, environment and amount.');
+        }
+        await loadAll(); status('Recovery state saved. Review the order before further action.', 'success');
+      } catch (error) { status(error.message, 'error'); } return;
+    }
     const send = event.target.closest('[data-send-printrove]');
     const sync = event.target.closest('[data-sync-printrove]');
     const hold = event.target.closest('[data-toggle-hold]');
@@ -578,8 +598,8 @@
         const order = orders.find((item) => item.id === send.dataset.sendPrintrove);
         if (!confirm(`Send paid order ${order?.order_number || ''} to Printrove now?`)) return;
         send.disabled = true;
-        await invokeOrderFunction('send-to-printrove', send.dataset.sendPrintrove);
-        status('Printrove order created.', 'success');
+        const result = await invokeOrderFunction('send-to-printrove', send.dataset.sendPrintrove);
+        status(result.state === 'succeeded' ? 'Printrove order created.' : `No creation confirmed: ${result.state || 'not eligible'}. Review the job state.`, result.state === 'succeeded' ? 'success' : 'notice');
       }
       if (sync) {
         sync.disabled = true;
@@ -588,10 +608,7 @@
       }
       if (hold) {
         const order = orders.find((item) => item.id === hold.dataset.toggleHold);
-        const { error } = await client.from('orders').update({
-          admin_hold: !order.admin_hold,
-          notes: !order.admin_hold ? `${order.notes || ''}\nManual hold set ${new Date().toISOString()}`.trim() : order.notes
-        }).eq('id', order.id);
+        const { error } = await client.rpc('admin_update_order', { p_order_id: order.id, p_changes: { admin_hold: !order.admin_hold, admin_notes: order.admin_notes || '' } });
         if (error) throw error;
         await loadAll();
         status(order.admin_hold ? 'Manual hold released.' : 'Order placed on manual hold.', 'success');
@@ -604,20 +621,14 @@
         if (trackingNumber === null) return;
         const trackingUrl = prompt('Tracking link (optional, https:// only):', order?.tracking_url || '');
         if (trackingUrl === null) return;
-        if (trackingUrl && !/^https:\/\//i.test(trackingUrl.trim())) throw new Error('Tracking link must begin with https://');
-        const { error } = await client.from('orders').update({
-          courier_name: courier.trim() || null,
-          tracking_number: trackingNumber.trim() || null,
-          tracking_url: trackingUrl.trim() || null,
-          dispatched_at: (trackingNumber.trim() || trackingUrl.trim()) ? (order?.dispatched_at || new Date().toISOString()) : null,
-          order_status: (trackingNumber.trim() || trackingUrl.trim()) ? 'processing' : order?.order_status
-        }).eq('id', order.id);
+        if (trackingUrl && !window.VeyrathAPI.safeHttps(trackingUrl.trim())) throw new Error('Use a public HTTPS tracking link.');
+        const { error } = await client.rpc('admin_update_order', { p_order_id: order.id, p_changes: { courier_name: courier.trim(), tracking_number: trackingNumber.trim(), tracking_url: trackingUrl.trim(), dispatched_at: trackingNumber.trim() ? (order.dispatched_at || new Date().toISOString()) : null } });
         if (error) throw error;
         await loadAll();
-        if (trackingNumber.trim() || trackingUrl.trim()) {
+        if (trackingNumber.trim()) {
           const { data: notification, error: notificationError } = await client.functions.invoke('notify-order-tracking', { body: { order_id: order.id } });
-          if (notificationError || !notification?.success) status('Tracking saved. Deploy the notification function and configure email to send the customer update.', 'notice');
-          else status(notification.email?.sent ? 'Tracking saved and customer email sent.' : 'Tracking saved. Customer tracking is live.', 'success');
+          if (notificationError || !notification?.success) status('Tracking saved. Notification queue request failed; retry the notification after recovery.', 'notice');
+          else status('Tracking saved; notification queued. Delivery is separate.', 'success');
         } else status('Tracking details saved. The customer can now use Track order.', 'success');
       }
     } catch (error) {
@@ -627,9 +638,7 @@
     }
   }
 
-  function csvCell(value) {
-    return `"${String(value ?? '').replace(/"/g, '""')}"`;
-  }
+  const csvCell = window.VeyrathAPI.csvCell;
 
   function exportOrders() {
     const headers = ['Order number', 'Created', 'Customer', 'Phone', 'Email', 'Address', 'Items', 'Subtotal', 'Shipping', 'Total', 'Payment status', 'Razorpay payment ID', 'Fulfilment status', 'Printrove order ID', 'Printrove status', 'Admin hold'];
@@ -641,7 +650,7 @@
       order.customer_email,
       [order.address_line1, order.address_line2, order.city, order.state, order.pincode].filter(Boolean).join(', '),
       (order.order_items || []).map((item) => `${item.quantity}x ${item.product_name} ${item.colour}/${item.size}`).join('; '),
-      order.subtotal,
+      order.subtotal_amount,
       order.shipping_amount,
       order.total_amount,
       order.payment_status,
@@ -814,7 +823,7 @@
     fillCollectionCategoryFilter();
     const visible = visiblePickerProducts();
     picker.innerHTML = visible.length ? visible.map((product) => {
-      const image = galleryOf(product)[0] || product.image_url || product.front_design_url || 'veyrath-tee.jpg';
+      const image = galleryOf(product)[0] || product.image_url || 'veyrath-tee.jpg';
       const checked = collectionSelection.has(String(product.id)) ? 'checked' : '';
       const details = [
         split(product.colours).slice(0, 3).join(', '),
@@ -902,15 +911,8 @@
         is_published: form.elements.is_published.checked,
         is_featured: form.elements.is_featured.checked
       };
-      const { error } = await client.from('collections').upsert(payload);
+      const { error } = await client.rpc('admin_save_collection', { p_collection: payload, p_product_ids: selectedIds });
       if (error) throw error;
-      const remove = await client.from('collection_products').delete().eq('collection_id', collectionId);
-      if (remove.error) throw remove.error;
-      if (selectedIds.length) {
-        const rows = selectedIds.map((productId, index) => ({ collection_id: collectionId, product_id: productId, sort_order: index }));
-        const add = await client.from('collection_products').insert(rows);
-        if (add.error) throw add.error;
-      }
       resetCollection();
       await loadAll();
       message(form, `Collection saved with ${selectedIds.length} product${selectedIds.length === 1 ? '' : 's'}.`);
@@ -1034,7 +1036,7 @@
     $('#statCollections').textContent = collections.length;
     $('#statSizeCharts').textContent = sizeCharts.length;
     $('#statPaid').textContent = orders.filter((order) => order.payment_status === 'paid').length;
-    $('#statPrintrove').textContent = orders.filter((order) => ['not_sent', 'printrove_failed'].includes(order.fulfilment_status) && order.payment_status === 'paid').length;
+    $('#statPrintrove').textContent = orders.filter((order) => ['not_sent', 'action_required', 'reconciliation_required'].includes(order.fulfilment_status) && order.payment_status === 'paid').length;
     $('#statHolds').textContent = orders.filter((order) => order.admin_hold).length;
     $('#statCoupons').textContent = coupons.filter((coupon) => coupon.is_active && coupon.is_public).length;
     renderProducts();
@@ -1064,9 +1066,10 @@
       const parsed = JSON.parse($('#importJson').value);
       const importedProducts = Array.isArray(parsed) ? parsed : parsed.products;
       if (Array.isArray(importedProducts) && importedProducts.length) {
-        const normalized = importedProducts.map((product) => ({ ...product, id: /^[0-9a-f-]{36}$/i.test(product.id || '') ? product.id : uuid() }));
-        const { error } = await client.from('products').upsert(normalized);
-        if (error) throw error;
+        for (const product of importedProducts) {
+          const { error } = await client.rpc('admin_save_product', { p_product: { ...product, id: /^[0-9a-f-]{36}$/i.test(product.id || '') ? product.id : uuid(), is_published: false, rating: 0, fulfilment_status: 'planned' } });
+          if (error) throw error;
+        }
       }
       if (parsed.siteData) {
         const { error } = await client.from('site_settings').upsert({ key: 'site_data', value: parsed.siteData, is_public: true });
@@ -1076,16 +1079,12 @@
         const { error } = await client.from('size_charts').upsert(parsed.sizeCharts);
         if (error) throw error;
       }
-      if (Array.isArray(parsed.collections) && parsed.collections.length) {
-        const { error } = await client.from('collections').upsert(parsed.collections);
-        if (error) throw error;
-      }
-      if (Array.isArray(parsed.collectionProducts) && parsed.collectionProducts.length) {
-        const { error } = await client.from('collection_products').upsert(parsed.collectionProducts);
-        if (error) throw error;
+      if (Array.isArray(parsed.collections)) for (const collection of parsed.collections) {
+        const ids = (parsed.collectionProducts || []).filter(m => m.collection_id === collection.id).map(m => m.product_id);
+        const { error } = await client.rpc('admin_save_collection', { p_collection: { ...collection, is_published: false }, p_product_ids: ids }); if (error) throw error;
       }
       await loadAll();
-      message(form, 'Data imported.');
+      message(form, 'Catalogue imported as drafts. Verify every supplier mapping before enabling checkout.');
     } catch (error) {
       message(form, `Import failed: ${error.message}`);
     }
@@ -1103,7 +1102,7 @@
     $('#productForm').addEventListener('submit', submitProduct);
     $('#productForm').elements.image_files.addEventListener('change', gallerySelection);
     $('#productReset').addEventListener('click', resetProduct);
-    ['price', 'selling_price', 'base_cost', 'shipping_cost'].forEach((name) => $('#productForm').elements[name].addEventListener('input', updateProfit));
+    ['price', 'selling_price', 'base_cost', 'supplier_shipping_cost'].forEach((name) => $('#productForm').elements[name].addEventListener('input', updateProfit));
     $('#productsTable').addEventListener('click', async (event) => {
       const edit = event.target.closest('[data-edit-product]');
       const toggle = event.target.closest('[data-toggle-product]');
@@ -1117,8 +1116,8 @@
       }
       if (remove) {
         const product = products.find((item) => item.id === remove.dataset.deleteProduct);
-        if (product && confirm(`Delete “${product.name}”?`)) {
-          const { error } = await client.from('products').delete().eq('id', product.id);
+        if (product && confirm(`Archive “${product.name}”?`)) {
+          const { error } = await client.from('products').update({ archived_at: new Date().toISOString(), is_published: false }).eq('id', product.id);
           if (error) alert(error.message);
           else await loadAll();
         }
@@ -1180,7 +1179,7 @@
     $('#sizeChartsTable').addEventListener('click', sizeChartAction);
 
     $('#importForm').addEventListener('submit', importData);
-    $('#exportProducts').addEventListener('click', () => download('products.js', `(function(){window.VEYRATH_PRODUCTS=${JSON.stringify(products, null, 2)};})();\n`));
+    $('#exportProducts').addEventListener('click', () => download('products.js', `(function(){window.VEYRATH_PRODUCTS=${JSON.stringify(products.map(({id,slug,name,description,category,price,selling_price,images,image_url,sizes,colours,tags,is_published}) => ({id,slug,name,description,category,price,selling_price,images,image_url,sizes,colours,tags,is_published,checkout_ready:false})), null, 2)};})();\n`));
     $('#exportSite').addEventListener('click', () => download('site-data.js', `(function(){window.VEYRATH_SITE_DATA=${JSON.stringify(siteData, null, 2)};window.VEYRATH_SIZE_CHARTS=${JSON.stringify(sizeCharts, null, 2)};window.VEYRATH_COLLECTIONS=${JSON.stringify(collections, null, 2)};window.VEYRATH_COLLECTION_PRODUCTS=${JSON.stringify(collectionProducts, null, 2)};})();\n`));
     $('#exportJson').addEventListener('click', () => download('veyrath-data.json', JSON.stringify({ products, siteData, sizeCharts, collections, collectionProducts }, null, 2), 'application/json'));
     $('#clearLocalData').addEventListener('click', () => {

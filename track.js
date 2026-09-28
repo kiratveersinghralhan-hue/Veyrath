@@ -1,81 +1,42 @@
 (function () {
   'use strict';
-  const $ = (selector) => document.querySelector(selector);
-  const cfg = window.VEYRATH_SUPABASE || {};
-  let client;
-
-  async function connect() {
-    if (client) return client;
-    if (!/^https:\/\//.test(cfg.url || '') || !cfg.anonKey) throw new Error('Secure order tracking is not configured.');
-    if (!window.supabase) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Could not load secure tracking.'));
-        document.head.appendChild(script);
-      });
-    }
-    client = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    return client;
-  }
-
-  function statusText(order) {
-    const raw = String(order.printrove_status || order.fulfilment_status || order.order_status || 'processing');
-    return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-  }
-
+  const $ = (s) => document.querySelector(s);
+  const api = window.VeyrathAPI;
   function render(order) {
-    const status = String(order.printrove_status || '').toLowerCase();
-    const shipped = /ship|dispatch|transit|pickup|out for delivery|delivered/.test(status) || Boolean(order.tracking_number);
-    const delivered = /delivered|fulfilled|completed/.test(status) || order.order_status === 'fulfilled';
+    const support = $('#trackOrderResult');
+    if (support) {
+      support.replaceChildren();
+      const title = document.createElement('strong'); title.textContent = `${order.order_number} · ${order.stage}`; support.append(title);
+      const detail = document.createElement('span'); detail.textContent = order.tracking_number ? `${order.courier_name} · ${order.tracking_number}` : 'Tracking appears after dispatch.'; support.append(detail);
+      if (order.tracking_url) { const a = document.createElement('a'); a.href = order.tracking_url; a.textContent = 'Track shipment ↗'; a.target = '_blank'; a.rel = 'noopener noreferrer'; support.append(a); }
+      support.dataset.tone = 'success'; return;
+    }
     $('#trackResultNumber').textContent = order.order_number;
-    $('#trackResultBadge').textContent = statusText(order);
-    $('#trackPrintStatus').textContent = statusText(order);
+    $('#trackResultBadge').textContent = order.stage;
+    $('#trackPrintStatus').textContent = order.stage;
     $('#trackCourier').textContent = order.courier_name || 'Assigned at dispatch';
     $('#trackNumber').textContent = order.tracking_number || 'Not generated yet';
-    $('#trackStepPaid').classList.toggle('is-complete', order.payment_status === 'paid');
-    $('#trackStepProduction').classList.toggle('is-complete', ['processing', 'fulfilled'].includes(order.order_status));
-    $('#trackStepShipped').classList.toggle('is-complete', shipped);
-    $('#trackStepDelivered').classList.toggle('is-complete', delivered);
-    const link = $('#trackCourierLink');
-    link.hidden = !order.tracking_url;
+    $('#trackStepPaid').classList.toggle('is-complete', Boolean(order.paid_at));
+    $('#trackStepProduction').classList.toggle('is-complete', ['In production', 'Dispatched', 'Delivered'].includes(order.stage));
+    $('#trackStepShipped').classList.toggle('is-complete', Boolean(order.dispatched_at));
+    $('#trackStepDelivered').classList.toggle('is-complete', Boolean(order.delivered_at));
+    const link = $('#trackCourierLink'); link.hidden = !order.tracking_url; link.removeAttribute('href');
     if (order.tracking_url) link.href = order.tracking_url;
     $('#trackResult').hidden = false;
   }
-
   async function lookup(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const button = form.querySelector('button');
-    const message = $('#trackMessage');
-    button.disabled = true;
-    button.textContent = 'Finding order…';
-    message.textContent = '';
-    $('#trackResult').hidden = true;
-    try {
-      const values = Object.fromEntries(new FormData(form));
-      const supabase = await connect();
-      const { data, error } = await supabase.functions.invoke('track-order', { body: {
-        order_number: String(values.order_number || '').trim(),
-        contact: String(values.contact || '').trim(),
-      } });
-      if (error || !data?.success) throw new Error(data?.error || error?.message || 'Tracking is temporarily unavailable.');
-      const order = data.order;
-      if (!order) throw new Error('No matching order found. Check the order number and checkout email or phone.');
-      render(order);
-    } catch (error) {
-      message.textContent = error.message || 'Tracking is temporarily unavailable.';
-    } finally {
-      button.disabled = false;
-      button.textContent = 'Track order';
-    }
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"]');
+    const message = $('#trackMessage') || $('#trackOrderResult'); const label = button.textContent;
+    button.disabled = true; button.textContent = 'Finding order…'; message.textContent = '';
+    if ($('#trackResult')) $('#trackResult').hidden = true;
+    try { const v = Object.fromEntries(new FormData(form)); render(await api.track(String(v.order_number || ''), String(v.contact || v.email || ''))); }
+    catch (error) { message.textContent = error.message; message.dataset.tone = 'error'; }
+    finally { button.disabled = false; button.textContent = label; }
   }
-
   function init() {
-    const orderNumber = new URLSearchParams(location.search).get('order');
-    if (orderNumber) $('#trackOrderNumber').value = orderNumber;
-    $('#trackForm').addEventListener('submit', lookup);
+    const form = $('#trackForm') || $('#trackOrderForm'); if (!form) return;
+    const number = new URLSearchParams(location.search).get('order'); if (number) form.elements.order_number.value = number;
+    form.addEventListener('submit', lookup);
   }
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 })();

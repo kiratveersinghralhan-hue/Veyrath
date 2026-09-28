@@ -1,81 +1,17 @@
 (function () {
   'use strict';
-  const $ = (s, root = document) => root.querySelector(s);
-  const esc = (v = '') => String(v).replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
-  const money = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v) || 0);
-  const split = (value) => Array.isArray(value) ? value : String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-  const cfg = window.VEYRATH_SUPABASE || {};
-  let client = null; let activeProduct = null; let freeShippingThreshold = 1999; let activeCoupon = null;
-
-  function configured() { return /^https:\/\//.test(cfg.url || '') && cfg.anonKey && !cfg.anonKey.includes('YOUR_'); }
-  function message(text, tone = '') { const node = $('#checkoutMessage'); if (!node) return; node.textContent = text; node.dataset.tone = tone; }
-  function setBusy(busy, label = 'Pay securely') { const button = $('#checkoutSubmit'); if (!button) return; button.disabled = busy; button.textContent = busy ? label : 'Pay securely'; }
-  function productPrice(product) { return Number(product.sale_price || product.selling_price || product.price || 0); }
-  function selectedQuantity() { return Math.max(1, Math.min(10, Number($('#checkoutQuantity')?.value || 1))); }
-  function calculate() {
-    if (!activeProduct) return;
-    const subtotal = productPrice(activeProduct) * selectedQuantity();
-    const shipping = subtotal >= freeShippingThreshold ? 0 : Number(activeProduct.shipping_cost || 0);
-    const discount = couponDiscount(subtotal);
-    $('#checkoutSubtotal').textContent = money(subtotal);
-    $('#checkoutShipping').textContent = shipping ? money(shipping) : 'Free';
-    const discountRow = $('#checkoutDiscountRow');
-    if (discountRow) {
-      discountRow.hidden = !discount;
-      $('#checkoutDiscount').textContent = `−${money(discount)}`;
-    }
-    $('#checkoutTotal').textContent = money(Math.max(0, subtotal + shipping - discount));
-  }
-
-  function couponDiscount(subtotal) {
-    if (!activeCoupon) return 0;
-    const value = Number(activeCoupon.discount_value || 0);
-    const calculated = activeCoupon.discount_type === 'percentage' ? subtotal * value / 100 : value;
-    return Math.max(0, Math.min(subtotal, Math.round(calculated * 100) / 100));
-  }
-
-  function couponMessage(text, tone = '') {
-    const node = $('#checkoutCouponMessage');
-    if (!node) return;
-    node.textContent = text;
-    node.dataset.tone = tone;
-  }
-
-  function clearCoupon() {
-    activeCoupon = null;
-    const input = $('#checkoutCoupon');
-    if (input) input.value = '';
-    couponMessage('Have an offer code? Apply it before you pay.');
-  }
-
-  async function applyCoupon(requestedCode = '') {
-    const input = $('#checkoutCoupon');
-    if (!input || !activeProduct) return;
-    const code = String(requestedCode || input.value || '').trim().toUpperCase();
-    if (!code) { clearCoupon(); calculate(); return; }
-    const button = $('#applyCoupon');
-    button.disabled = true;
-    couponMessage('Checking code…');
-    try {
-      const supabase = await ensureClient();
-      const subtotal = productPrice(activeProduct) * selectedQuantity();
-      const email = String($('#checkoutForm')?.elements?.email?.value || '').trim().toLowerCase();
-      const { data, error } = await supabase.rpc('validate_coupon_for_checkout', { p_code: code, p_subtotal: subtotal, p_product_ids: [activeProduct.id], p_email: email });
-      if (error || !data?.valid) throw new Error(data?.message || error?.message || 'That code is not available.');
-      activeCoupon = { code: data.code, discount_type: data.discount_type, discount_value: data.discount_value, label: data.label || '' };
-      input.value = data.code;
-      couponMessage(`${data.label || data.code} applied — you save ${money(data.discount_amount)}.`, 'success');
-      calculate();
-      window.VeyrathAnalytics?.track?.('select_promotion', { promotion_id: data.code, value: Number(data.discount_amount || 0), currency: 'INR' });
-    } catch (error) {
-      activeCoupon = null;
-      couponMessage(error.message || 'That code is not available.', 'error');
-      calculate();
-    } finally {
-      button.disabled = false;
-    }
-  }
-
+  const $ = (s) => document.querySelector(s);
+  const api = window.VeyrathAPI;
+  const esc = (v = '') => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const money = v => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(Number(v) || 0);
+  const storageKey = `veyrath-checkout-v1:${window.VEYRATH_SUPABASE?.url || 'unconfigured'}`;
+  let activeProduct, quote, pending, busy = false, quoteVersion = 0, timer;
+  try { pending = JSON.parse(sessionStorage.getItem(storageKey)); } catch (_) { pending = null; }
+  function save() { sessionStorage.setItem(storageKey, JSON.stringify(pending)); }
+  function message(text, tone = '') { $('#checkoutMessage').textContent = text; $('#checkoutMessage').dataset.tone = tone; }
+  function setBusy(value, text = 'Pay securely') { busy = value; $('#checkoutSubmit').disabled = value; $('#checkoutSubmit').textContent = text; }
+  function show() { if (!$('#checkoutDialog').open) $('#checkoutDialog').showModal(); document.body.classList.add('checkout-open'); }
+  function close() { $('#checkoutDialog').close(); document.body.classList.remove('checkout-open'); }
   function markup() {
     return `<dialog class="checkout-dialog" id="checkoutDialog" aria-labelledby="checkoutTitle">
       <button class="checkout-close" type="button" aria-label="Close checkout">×</button>
@@ -90,150 +26,123 @@
           </section>
           <aside class="checkout-summary">
             <p class="eyebrow">Order summary</p>
-            <div class="checkout-coupon"><label for="checkoutCoupon">Offer code <em>optional</em></label><div><input id="checkoutCoupon" inputmode="text" maxlength="40" autocomplete="off" placeholder="LAUNCH20"><button id="applyCoupon" type="button">Apply</button></div><small id="checkoutCouponMessage" aria-live="polite">Have an offer code? Apply it before you pay.</small></div>
+            <div class="checkout-coupon"><label for="checkoutCoupon">Offer code <em>optional</em></label><div><input id="checkoutCoupon" inputmode="text" maxlength="40" autocomplete="off" placeholder="Offer code"><button id="applyCoupon" type="button">Apply</button></div><small id="checkoutCouponMessage" aria-live="polite">Have an offer code? Apply it before you pay.</small></div>
             <dl><div><dt>Subtotal</dt><dd id="checkoutSubtotal">₹0</dd></div><div class="checkout-discount" id="checkoutDiscountRow" hidden><dt>Offer</dt><dd id="checkoutDiscount">−₹0</dd></div><div><dt>Shipping</dt><dd id="checkoutShipping">—</dd></div><div class="checkout-total"><dt>Total</dt><dd id="checkoutTotal">₹0</dd></div></dl>
-            <button class="btn btn-gold" id="checkoutSubmit" type="submit">Pay securely</button><small><span aria-hidden="true">◇</span> Price and availability are rechecked securely before payment.</small><p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p>
+            <button type="button" id="checkoutRecovery" hidden>Check saved payment</button><button class="btn btn-gold" id="checkoutSubmit" type="submit">Pay securely</button><small><span aria-hidden="true">◇</span> Price and availability are rechecked securely before payment.</small><p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p>
           </aside>
         </div>
       </form>
     </dialog>`;
   }
 
-  async function ensureClient() {
-    if (client) return client;
-    if (!configured()) throw new Error('Secure checkout is not configured yet.');
-    if (!window.supabase) {
-      await new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; script.onload = resolve; script.onerror = () => reject(new Error('Could not load secure checkout.')); document.head.appendChild(script); });
-    }
-    client = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data } = await client.from('site_settings').select('value').eq('key', 'commerce').maybeSingle();
-    freeShippingThreshold = Number(data?.value?.free_shipping_threshold || 1999);
-    return client;
-  }
 
-  async function findProduct(productId) {
-    const local = window.VeyrathStore?.products?.().find((item) => String(item.id) === String(productId));
-    if (local) return local;
-    const supabase = await ensureClient();
-    const { data, error } = await supabase.from('storefront_products').select('*').eq('id', productId).maybeSingle();
-    if (error || !data) throw new Error('This product is not available right now.');
-    return data;
+  function items() { return [{ product_id: activeProduct.id, size: $('#checkoutSize').value, colour: $('#checkoutColour').value, quantity: Number($('#checkoutQuantity').value) }]; }
+  function renderQuote(q) {
+    $('#checkoutSubtotal').textContent = money(q.subtotal_amount);
+    $('#checkoutShipping').textContent = money(q.shipping_amount);
+    $('#checkoutDiscount').textContent = `−${money(q.discount_amount)}`;
+    $('#checkoutDiscountRow').hidden = !Number(q.discount_amount);
+    $('#checkoutTotal').textContent = money(q.total_amount);
   }
-
-  function fillProduct(product) {
-    activeProduct = product;
-    const sizes = split(product.sizes); const colours = split(product.colours);
-    $('#checkoutTitle').textContent = 'Complete your signal.'; $('#checkoutSubmit').hidden = false;
-    $('#checkoutProductImage').src = product.image_url || product.front_design_url || 'veyrath-tee.jpg';
-    $('#checkoutProductImage').alt = product.name;
-    $('#checkoutProductCategory').textContent = product.category || 'VEYRATH';
-    $('#checkoutProductName').textContent = product.name;
-    $('#checkoutProductPrice').textContent = money(productPrice(product));
-    $('#checkoutSize').innerHTML = (sizes.length ? sizes : ['One size']).map((value) => `<option value="${esc(value)}">${esc(value)}</option>`).join('');
-    $('#checkoutColour').innerHTML = (colours.length ? colours : ['As shown']).map((value) => `<option value="${esc(value)}">${esc(value)}</option>`).join('');
-    $('#checkoutQuantity').value = '1';
-    $('#checkoutForm').reset();
-    $('#checkoutQuantity').value = '1';
-    clearCoupon();
-    const autoOffer = window.VeyrathStore?.offerForProduct?.(product.id);
-    if (autoOffer?.auto_apply && autoOffer.code) {
-      $('#checkoutCoupon').value = autoOffer.code;
-      couponMessage(`${autoOffer.label || autoOffer.code} is being applied…`);
-      setTimeout(() => applyCoupon(autoOffer.code), 0);
-    }
-    message(''); calculate();
-  }
-
-  async function open(productId) {
+  async function refreshQuote() {
+    if (!activeProduct || busy) return;
+    const version = ++quoteVersion; quote = null; $('#checkoutSubmit').disabled = true;
+    const code = $('#checkoutCoupon').value.trim().toUpperCase();
     try {
-      const product = await findProduct(productId);
-      fillProduct(product);
-      $('#productModal')?.close();
-      showCheckout();
-      window.VeyrathAnalytics?.track?.('begin_checkout', { items: [{ item_id: String(product.id), item_name: product.name, price: productPrice(product), quantity: 1 }], value: productPrice(product), currency: 'INR' });
+      const q = await api.invoke('create-checkout', { action: 'quote', items: items(), email: $('#checkoutForm').elements.email.value.trim().toLowerCase(), coupon_code: code });
+      if (version !== quoteVersion) return;
+      quote = q; renderQuote(q);
+      $('#checkoutCouponMessage').textContent = q.coupon_code ? `${q.coupon_code} applied — save ${money(q.discount_amount)}.` : 'Have an offer code? Apply it before you pay.';
+      $('#checkoutSubmit').disabled = false;
     } catch (error) {
-      window.alert(error.message || 'Checkout is unavailable right now.');
+      if (version !== quoteVersion) return;
+      $('#checkoutTotal').textContent = 'Unavailable'; $('#checkoutCouponMessage').textContent = code ? 'Offer or checkout unavailable. Check the code and checkout email.' : error.message;
     }
   }
-
-  function showCheckout() { const dialog = $('#checkoutDialog'); if (dialog && !dialog.open) dialog.showModal(); document.body.classList.add('checkout-open'); }
-  function close() { $('#checkoutDialog')?.close(); document.body.classList.remove('checkout-open'); }
+  function scheduleQuote() { quote = null; quoteVersion++; $('#checkoutSubmit').disabled = true; clearTimeout(timer); timer = setTimeout(refreshQuote, 500); }
+  async function open(id) {
+    if (busy) return;
+    try {
+      const db = await api.client(); const { data: product, error } = await db.from('storefront_products').select('*').eq('id', id).maybeSingle();
+      if (error || !product?.checkout_ready) throw new Error('This product is temporarily unavailable.');
+      activeProduct = product; $('#checkoutForm').reset();
+      $('#checkoutProductImage').src = api.safeImage(product.image_url) || 'veyrath-tee.jpg'; $('#checkoutProductImage').alt = product.name;
+      $('#checkoutProductName').textContent = product.name; $('#checkoutProductCategory').textContent = product.category;
+      $('#checkoutProductPrice').textContent = money(product.selling_price || product.price);
+      for (const [selector, values] of [['#checkoutSize', product.sizes], ['#checkoutColour', product.colours]]) $(selector).innerHTML = values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+      $('#checkoutTitle').textContent = 'Complete your signal.'; $('#checkoutSubmit').hidden = false;
+      $('#checkoutRecovery').hidden = !pending?.order_id;
+      message(pending?.order_number ? `Saved order ${pending.order_number}. Check its payment before retrying; retries reuse the frozen order.` : '');
+      $('#productModal')?.close(); show(); await refreshQuote();
+    } catch (error) { window.alert(error.message); }
+  }
   async function loadRazorpay() {
     if (window.Razorpay) return;
-    await new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = 'https://checkout.razorpay.com/v1/checkout.js'; script.async = true; script.onload = resolve; script.onerror = () => reject(new Error('Razorpay Checkout could not load.')); document.head.appendChild(script); });
+    await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://checkout.razorpay.com/v1/checkout.js';s.onload=resolve;s.onerror=()=>reject(new Error('Could not load payment. Your order is saved.'));document.head.appendChild(s);});
   }
-
-  async function functionError(error, fallback) {
-    try { const payload = await error?.context?.json(); return payload?.error || fallback; } catch (_) { return error?.message || fallback; }
+  function confirmed(result) {
+    message(`Payment confirmed for ${result.order_number}. Tracking will be available after dispatch.`, 'success');
+    $('#checkoutTitle').textContent = 'Payment confirmed.'; $('#checkoutSubmit').hidden = true; $('#checkoutRecovery').hidden = true;
+    window.VeyrathAnalytics?.track?.('purchase', { transaction_id: result.order_number, value: Number(result.total_amount), currency: result.currency || 'INR' });
+    pending = null; sessionStorage.removeItem(storageKey);
   }
-
-  async function submit(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!(form instanceof HTMLFormElement) || !activeProduct || !form.reportValidity()) return;
-    setBusy(true, 'Creating secure order…'); message('Confirming price and availability…');
+  async function recover() {
+    if (!pending?.order_id || busy) return;
+    setBusy(true, 'Checking payment…');
     try {
-      const supabase = await ensureClient();
-      const values = Object.fromEntries(new FormData(form));
-      values.phone = String(values.phone || '').replace(/\D/g, '');
-      values.pincode = String(values.pincode || '').replace(/\D/g, '');
-      const { data: pending, error: pendingError } = await supabase.rpc('create_pending_order', {
-        p_customer: { name: values.name, phone: values.phone, email: values.email, address_line1: values.address_line1, address_line2: values.address_line2 || '', city: values.city, state: values.state, pincode: values.pincode, coupon_code: activeCoupon?.code || '' },
-        p_items: [{ product_id: activeProduct.id, size: values.size, colour: values.colour, quantity: Number(values.quantity) }],
-      });
-      if (pendingError) throw new Error(pendingError.message || 'Could not save the order.');
-      sessionStorage.setItem('veyrath_pending_order', JSON.stringify({ id: pending.order_id, number: pending.order_number }));
-
-      const { data: paymentOrder, error: createError } = await supabase.functions.invoke('create-razorpay-order', { body: { order_id: pending.order_id } });
-      if (createError || !paymentOrder?.success) throw new Error(await functionError(createError, paymentOrder?.error || 'Could not start Razorpay.'));
+      let result;
+      if (pending.response) result = await api.invoke('verify-razorpay-payment', { order_id: pending.order_id, checkout_token: pending.checkout_token, ...pending.response });
+      else result = await api.invoke('create-checkout', { action: 'status', order_id: pending.order_id, checkout_token: pending.checkout_token });
+      if (result.success || result.payment_status === 'paid') confirmed(result);
+      else message(`Order ${pending.order_number} is awaiting payment confirmation. If charged, do not start another payment; check again or contact support.`, 'notice');
+    } catch (_) { message(`Confirmation is still pending for ${pending.order_number}. Keep your payment receipt. Check again; do not pay again if charged.`, 'notice'); }
+    finally { setBusy(false); }
+  }
+  async function fingerprint(value) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))))].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+  async function submit(event) {
+    event.preventDefault(); if (busy || !activeProduct || !event.currentTarget.reportValidity()) return;
+    if (pending?.response) return recover();
+    if (!quote) return refreshQuote();
+    setBusy(true, 'Preparing payment…'); clearTimeout(timer); quoteVersion++;
+    try {
+      const values = Object.fromEntries(new FormData($('#checkoutForm')));
+      const customer = Object.fromEntries(['name','email','phone','address_line1','address_line2','city','state','pincode'].map(k=>[k,String(values[k] || '').trim()]));
+      customer.email = customer.email.toLowerCase(); customer.coupon_code = $('#checkoutCoupon').value.trim().toUpperCase();
+      const input = { customer, items: items() }; const fp = await fingerprint(input);
+      if (pending && pending.fingerprint !== fp) throw new Error(`Saved checkout ${pending.order_number || ''} has different details. Check its payment first. To start a separate order, use a new tab after confirming no payment was taken.`);
+      if (!pending) {
+        pending = { fingerprint: fp, request_key: crypto.randomUUID() };
+        save(); // Persist before sending: a lost create response must reuse this key.
+      }
+      const order = await api.invoke('create-checkout', { action:'create', ...input, request_key:pending.request_key });
+      if (typeof order.checkout_token !== 'string' || !/^[0-9a-f]{64}$/.test(order.checkout_token)) throw new Error('Checkout response incomplete. Retry safely with the saved request.');
+      Object.assign(pending, order); save(); renderQuote(order); $('#checkoutRecovery').hidden = false;
+      const status = await api.invoke('create-checkout', { action:'status', order_id:pending.order_id, checkout_token:pending.checkout_token });
+      if (status.payment_status === 'paid') { confirmed(status); setBusy(false); return; }
+      const payment = await api.invoke('create-razorpay-order', { order_id:pending.order_id, checkout_token:pending.checkout_token });
+      if (payment.amount !== Math.round(Number(order.total_amount)*100)) throw new Error('Payment amount mismatch. Contact support.');
+      $('#checkoutTotal').textContent = money(payment.amount/100);
       await loadRazorpay();
-      setBusy(false); message('Opening Razorpay secure payment…');
-      let razorpayFailureMessage = '';
-      const razorpay = new window.Razorpay({
-        key: paymentOrder.key_id,
-        amount: paymentOrder.amount,
-        currency: paymentOrder.currency,
-        name: 'VEYRATH',
-        description: activeProduct.name,
-        image: new URL('logo.svg', location.href).href,
-        order_id: paymentOrder.razorpay_order_id,
-        prefill: { name: values.name, email: values.email, contact: values.phone },
-        notes: { veyrath_order: pending.order_number },
-        theme: { color: '#0b0b0b', backdrop_color: 'rgba(0,0,0,.88)' },
-        modal: { ondismiss: () => { showCheckout(); setBusy(false); message(razorpayFailureMessage || `Payment was not completed. Order ${pending.order_number} remains pending.`, razorpayFailureMessage ? 'error' : 'notice'); } },
-        handler: async (response) => {
-          showCheckout();
-          setBusy(true, 'Verifying payment…'); message('Payment received. Verifying it securely…');
-          const { data: verified, error: verifyError } = await supabase.functions.invoke('verify-razorpay-payment', { body: { order_id: pending.order_id, ...response } });
-          if (verifyError || !verified?.success) {
-            message(await functionError(verifyError, verified?.error || 'Payment verification is pending. Please keep your payment ID.'), 'error'); setBusy(false); return;
-          }
-          sessionStorage.removeItem('veyrath_pending_order');
-          form.reset();
-          $('#checkoutTitle').textContent = 'Payment confirmed.';
-          message(`Order ${verified.order_number} is confirmed. We will email tracking once your piece is dispatched.`, 'success');
-          $('#checkoutSubmit').hidden = true;
-          window.VeyrathAnalytics?.track?.('purchase', { transaction_id: verified.order_number, value: Number(pending.total_amount || paymentOrder.amount / 100 || 0), currency: 'INR', coupon: activeCoupon?.code || undefined });
-        },
+      const r = new window.Razorpay({ key:payment.key_id, amount:payment.amount, currency:payment.currency, order_id:payment.razorpay_order_id,
+        name:'VEYRATH', description:activeProduct.name, prefill:{name:customer.name,email:customer.email,contact:customer.phone}, theme:{color:'#0b0b0b'},
+        modal:{ondismiss:()=>{show();setBusy(false);message(`Order ${order.order_number} is saved. If charged, check payment before retrying.`, 'notice');}},
+        handler:async response=>{ pending.response=response; save(); show(); setBusy(false); await recover(); }
       });
-      razorpay.on('payment.failed', (response) => { razorpayFailureMessage = response?.error?.description || 'Payment failed. No fulfilment order was created.'; setBusy(false); });
-      close();
-      razorpay.open();
-    } catch (error) {
-      showCheckout(); message(error.message || 'Checkout could not be completed. Please try again.', 'error'); setBusy(false);
-    }
+      r.on('payment.failed',()=>{show();setBusy(false);message(`Payment was not confirmed for ${order.order_number}. Check payment status before retrying.`, 'notice');});
+      close(); r.open();
+    } catch(error) { show(); message(error.message, 'error'); setBusy(false); }
   }
-
   function init() {
-    document.body.insertAdjacentHTML('beforeend', markup());
-    document.addEventListener('click', (event) => { const button = event.target.closest('[data-buy-now]'); if (button) { event.preventDefault(); open(button.dataset.buyNow); } });
-    $('.checkout-close').addEventListener('click', close);
-    $('#checkoutDialog').addEventListener('click', (event) => { if (event.target === event.currentTarget) close(); });
-    $('#checkoutDialog').addEventListener('close', () => document.body.classList.remove('checkout-open'));
-    $('#checkoutQuantity').addEventListener('input', calculate);
-    $('#applyCoupon').addEventListener('click', applyCoupon);
-    $('#checkoutCoupon').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); applyCoupon(); } });
-    $('#checkoutForm').addEventListener('submit', submit);
+    document.body.insertAdjacentHTML('beforeend',markup());
+    document.addEventListener('click',event=>{const b=event.target.closest('[data-buy-now]');if(b&&!b.disabled){event.preventDefault();open(b.dataset.buyNow);}});
+    $('.checkout-close').addEventListener('click',close);
+    $('#checkoutDialog').addEventListener('close',()=>document.body.classList.remove('checkout-open'));
+    $('#checkoutForm').addEventListener('submit',submit);
+    $('#applyCoupon').addEventListener('click',()=>refreshQuote());
+    $('#checkoutCoupon').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();refreshQuote();}});
+    for (const s of ['#checkoutSize','#checkoutColour','#checkoutQuantity','#checkoutCoupon','#checkoutForm [name="email"]']) $(s).addEventListener('input',scheduleQuote);
+    $('#checkoutRecovery').addEventListener('click',recover);
+    if (pending?.order_id) { $('#checkoutRecovery').hidden=false; $('#checkoutSubmit').hidden=true; message(`Saved order ${pending.order_number}. Check payment confirmation before placing another order.`); show(); }
   }
-  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
 })();
