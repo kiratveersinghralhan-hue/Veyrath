@@ -427,17 +427,16 @@
     secondary.textContent = hero.secondary_label || 'Join inner circle';
     secondary.href = safeLink(hero.secondary_link) || '#inner-circle';
 
-    const fallbackOffers = [
-      { kicker: 'LAUNCH OFFER', text: '20% OFF WITH CODE LAUNCH20' },
-      { kicker: 'FREE SHIPPING', text: 'ON ORDERS ABOVE ₹1,999' },
-      { kicker: 'INNER CIRCLE', text: 'EARLY ACCESS TO EVERY DROP' }
+    const brandMessages = [
+      { kicker: 'INNER CIRCLE', text: 'EARLY ACCESS TO EVERY DROP' },
+      { kicker: 'MADE AFTER ORDER', text: 'LESS EXCESS. MORE INTENTION.' }
     ];
     const liveOffers = couponOffers().filter((offer) => offer.scope !== 'product').map((offer) => ({
       kicker: offer.auto_apply ? 'LAUNCH OFFER' : 'LIVE OFFER',
       text: `${offerLabel(offer)}${offer.auto_apply ? ' APPLIED AT CHECKOUT' : ` WITH CODE ${offer.code}`}`
     }));
-    const supportingOffers = (data.offers || []).filter((offer) => !/\bcode\b/i.test(String(offer.text || '')));
-    const offers = liveOffers.length ? [...liveOffers, ...supportingOffers] : (data.offers?.length ? data.offers : fallbackOffers);
+    // Only the public coupon contract may supply discount claims or codes.
+    const offers = [...liveOffers, ...brandMessages];
     const offerSet = offers.map((offer) => `<article><small>${esc(offer.kicker || 'VEYRATH')}</small><strong>${esc(offer.text || 'BORN AFTER DARK')}</strong><span>✦</span></article>`).join('');
     $('[data-offer-rail]').innerHTML = `<div class="offer-set">${offerSet}</div><div class="offer-set" aria-hidden="true">${offerSet}</div>`;
 
