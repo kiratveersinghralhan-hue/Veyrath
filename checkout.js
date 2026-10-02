@@ -60,16 +60,24 @@
     }
   }
   function scheduleQuote() { quote = null; quoteVersion++; $('#checkoutSubmit').disabled = true; clearTimeout(timer); timer = setTimeout(refreshQuote, 500); }
+  function syncSelection() {
+    if (!activeProduct) return;
+    const selected = api.selectProduct(activeProduct, { colour: $('#checkoutColour').value, size: $('#checkoutSize').value });
+    const image = api.galleryFor(activeProduct, selected.colour)[0], node = $('#checkoutProductImage');
+    if (image) { node.src = image.url; node.alt = image.alt; node.hidden = false; }
+    else { node.removeAttribute('src'); node.alt = ''; node.hidden = true; }
+  }
   async function open(id) {
     if (busy) return;
     try {
       const db = await api.client(); const { data: product, error } = await db.from('storefront_products').select('*').eq('id', id).maybeSingle();
       if (error || !product?.checkout_ready) throw new Error('This product is temporarily unavailable.');
       activeProduct = product; $('#checkoutForm').reset();
-      $('#checkoutProductImage').src = api.safeImage(product.image_url) || 'veyrath-tee.jpg'; $('#checkoutProductImage').alt = product.name;
       $('#checkoutProductName').textContent = product.name; $('#checkoutProductCategory').textContent = product.category;
       $('#checkoutProductPrice').textContent = money(product.selling_price || product.price);
       for (const [selector, values] of [['#checkoutSize', product.sizes], ['#checkoutColour', product.colours]]) $(selector).innerHTML = values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+      const selected = api.selectProduct(product);
+      $('#checkoutColour').value = selected.colour; $('#checkoutSize').value = selected.size; syncSelection();
       $('#checkoutTitle').textContent = 'Complete your signal.'; $('#checkoutSubmit').hidden = false;
       $('#checkoutRecovery').hidden = !pending?.order_id;
       message(pending?.order_number ? `Saved order ${pending.order_number}. Check its payment before retrying; retries reuse the frozen order.` : '');
@@ -140,7 +148,7 @@
     $('#checkoutForm').addEventListener('submit',submit);
     $('#applyCoupon').addEventListener('click',()=>refreshQuote());
     $('#checkoutCoupon').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();refreshQuote();}});
-    for (const s of ['#checkoutSize','#checkoutColour','#checkoutQuantity','#checkoutCoupon','#checkoutForm [name="email"]']) $(s).addEventListener('input',scheduleQuote);
+    for (const s of ['#checkoutSize','#checkoutColour','#checkoutQuantity','#checkoutCoupon','#checkoutForm [name="email"]']) $(s).addEventListener('input',()=>{ syncSelection(); scheduleQuote(); });
     $('#checkoutRecovery').addEventListener('click',recover);
     if (pending?.order_id) { $('#checkoutRecovery').hidden=false; $('#checkoutSubmit').hidden=true; message(`Saved order ${pending.order_number}. Check payment confirmation before placing another order.`); show(); }
   }

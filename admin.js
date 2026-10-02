@@ -23,7 +23,45 @@
   }).format(Number(value) || 0);
   const slugify = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const safeImage = window.VeyrathAPI.safeImage;
-  const galleryOf = (product = {}) => [...new Set([product.image_url, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean))];
+  const api = window.VeyrathAPI;
+  const galleryOf = (product = {}) => api.galleryUrls(product);
+  let colourMedia = new Map();
+  function renderColourEditor() {
+    const colours = split($('#productForm').elements.colours.value);
+    const enabled = $('#colourGalleryEnabled').checked;
+    $('#colourGalleryEditor').hidden = !enabled;
+    $('#productForm').elements.image_files.disabled = enabled;
+    $('#colourGalleryEditor').innerHTML = colours.map((colour, colourIndex) => {
+      if (!colourMedia.has(colour)) colourMedia.set(colour, [{ view:'front', url:'', alt:'' }, { view:'back', url:'', alt:'' }]);
+      return `<fieldset class="colour-media-group" data-colour-index="${colourIndex}"><legend>${esc(colour)}</legend>${colourMedia.get(colour).map((entry, index) => `<div class="colour-media-row" data-image-index="${index}"><label>View<select data-media-view>${['front','back','detail'].map(v=>`<option ${v===entry.view?'selected':''}>${v}</option>`).join('')}</select></label><label>Image URL<input data-media-url value="${esc(entry.url)}"></label><label>Select image<input data-media-file type="file" accept="image/jpeg,image/png,image/webp"></label><label>Alt text<input data-media-alt value="${esc(entry.alt)}"></label>${entry.url && safeImage(entry.url) ? `<img src="${esc(safeImage(entry.url))}" alt="${esc(entry.alt || colour)}" loading="lazy">` : ''}<small>${esc(entry.file?.name || '')}</small><button type="button" data-media-remove>Remove image</button></div>`).join('')}<button type="button" data-media-add>Add another image</button></fieldset>`;
+    }).join('');
+    $('#colourGalleryEditor').querySelectorAll('.colour-media-group').forEach(group => {
+      const colour = colours[Number(group.dataset.colourIndex)], rows = colourMedia.get(colour);
+      group.querySelectorAll('.colour-media-row').forEach(row => {
+        const entry = rows[Number(row.dataset.imageIndex)];
+        row.querySelector('[data-media-url]').addEventListener('input', e => { entry.url=e.target.value.trim(); });
+        row.querySelector('[data-media-alt]').addEventListener('input', e => { entry.alt=e.target.value; });
+        row.querySelector('[data-media-view]').addEventListener('change', e => { entry.view=e.target.value; });
+        row.querySelector('[data-media-file]').addEventListener('change', e => { entry.file=e.target.files[0] || null; row.querySelector('small').textContent=entry.file?.name || ''; });
+        row.querySelector('[data-media-remove]').addEventListener('click', () => { rows.splice(Number(row.dataset.imageIndex),1); renderColourEditor(); });
+      });
+      group.querySelector('[data-media-add]').addEventListener('click', () => { rows.push({view:'detail',url:'',alt:''}); renderColourEditor(); });
+    });
+  }
+  function colourEntries() {
+    return split($('#productForm').elements.colours.value).flatMap(colour => (colourMedia.get(colour) || []).filter(e=>e.url || e.file).map(e=>({colour,view:e.view,url:e.url,alt:e.alt,file:e.file})));
+  }
+  function validateEditor() {
+    const form = $('#productForm');
+    try {
+      const map = api.parseVariantMap(form.elements.printrove_variant_map.value);
+      const result = api.validateVariants(form.elements.colours.value, form.elements.sizes.value, map);
+      const colours = split(form.elements.colours.value), entries = colourEntries();
+      const missingMedia = $('#colourGalleryEnabled').checked ? colours.filter(c=>!entries.some(e=>e.colour===c && (safeImage(e.url) || e.file))) : (colours.length===1 && (safeImage(form.elements.image_url.value) || form.elements.image_files.files.length || galleryOf(products.find(p=>p.id===form.elements.id.value)).length) ? [] : colours);
+      $('#productValidation').textContent = `Mappings: ${result.mapped}/${result.expected}. Missing: ${result.missing.join(', ') || 'none'}. Extra: ${result.extra.join(', ') || 'none'}. ${result.errors.join(' ')} Media missing: ${missingMedia.join(', ') || 'none'}. Provider verification is separate.`;
+      return result;
+    } catch(error) { $('#productValidation').textContent=error.message; return {errors:[error.message],complete:false}; }
+  }
   const productPrice = (product = {}) => Number(product.sale_price || product.selling_price || product.price || 0);
 
   const config = window.VEYRATH_SUPABASE || {};
@@ -235,6 +273,10 @@
       else field.value = Array.isArray(value) ? value.join(', ') : (value ?? '');
     });
     form.elements.profit_estimate.value = money(profit(product));
+    const normalized = api.normalizeGallery(product);
+    colourMedia = new Map(normalized.colours.map(colour => [colour, normalized.byColour[colour].map(e=>({...e}))]));
+    $('#colourGalleryEnabled').checked = normalized.structured;
+    renderColourEditor(); validateEditor();
     const count = galleryOf(product).length;
     $('#productGalleryStatus').textContent = `${count} existing image${count === 1 ? '' : 's'}. Select new files only to replace this gallery.`;
     $('#productFormTitle').textContent = `Edit ${product.name}`;
@@ -253,6 +295,7 @@
     form.elements.is_published.checked = false;
     form.elements.is_featured.checked = false;
     form.elements.is_home_pinned.checked = false;
+    colourMedia = new Map(); $('#colourGalleryEnabled').checked=false; renderColourEditor(); $('#productValidation').textContent='';
     $('#productGalleryStatus').textContent = 'No new files selected.';
     $('#productFormTitle').textContent = 'Add product';
     message(form, '');
@@ -329,6 +372,36 @@
     return data.publicUrl;
   }
 
+  async function uploadColourGallery(entries, productId, form) {
+    const batch = uuid(), colours = split(form.elements.colours.value), bucket = client.storage.from('product-images'), gallery = [], uploadedPaths = [], attemptedPaths = [];
+    if(entries.length > 100) throw new Error('Use at most 100 colour images per product.');
+    for(const entry of entries) {
+      if(entry.file && (!/^image\/(jpeg|png|webp)$/.test(entry.file.type) || entry.file.size>5*1024*1024 || !entry.file.size)) throw new Error('Choose a nonempty JPG, PNG or WebP image up to 5 MB.');
+      if(!entry.file && !safeImage(entry.url)) throw new Error('Invalid colour image URL.');
+    }
+    try {
+      for (const [index, entry] of entries.entries()) {
+        let url=entry.url;
+        if(entry.file) {
+          const file=entry.file;
+          if(!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size>5*1024*1024 || !file.size) throw new Error('Choose a nonempty JPG, PNG or WebP image up to 5 MB.');
+          // Preserve approved originals; unique batches make replacement and
+          // failure accounting explicit without overwrite/upsert.
+          const extension={ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp' }[file.type];
+          const path=api.colourImagePath(productId,batch,colours.indexOf(entry.colour),entry.colour,index,entry.view,extension);
+          message(form,`Uploading ${entry.colour} ${entry.view}…`);
+          attemptedPaths.push(path);
+          const {error}=await bucket.upload(path,file,{contentType:file.type,cacheControl:'31536000',upsert:false});
+          if(error) throw error;
+          uploadedPaths.push(path); url=bucket.getPublicUrl(path).data.publicUrl;
+        }
+        if(!safeImage(url)) throw new Error('Invalid colour image URL.');
+        gallery.push({colour:entry.colour,view:entry.view,url:safeImage(url),alt:entry.alt || `${form.elements.name.value.trim()} ${entry.colour} ${entry.view}`});
+      }
+      return {gallery,uploadedPaths};
+    } catch(error) { throw new Error(`${error.message}${attemptedPaths.length ? ` Upload outcomes require review; attempted paths: ${attemptedPaths.join(', ')}. Confirmed objects retained: ${uploadedPaths.length}.` : ''}`); }
+  }
+
   function gallerySelection() {
     const files = [...($('#productForm').elements.image_files.files || [])];
     const total = files.reduce((sum, file) => sum + file.size, 0);
@@ -344,20 +417,27 @@
     const existing = products.find((product) => product.id === raw.id);
     message(form, 'Saving securely…');
     try {
-      let variantMap = {};
-      if (raw.printrove_variant_map.trim()) {
-        variantMap = JSON.parse(raw.printrove_variant_map);
-        if (!variantMap || Array.isArray(variantMap) || typeof variantMap !== 'object') throw new Error('Variant map must be a JSON object.');
+      const variantMap = api.parseVariantMap(raw.printrove_variant_map);
+      const validation = validateEditor();
+      if(validation.errors.length) throw new Error(validation.errors.join(' '));
+      if(raw.fulfilment_status==='ready' && (!validation.complete || !existing?.mapping_verified_at || existing.fulfilment_status!=='ready')) throw new Error('Ready requires complete mappings and existing server-side provider verification.');
+      const suppliedEntries=colourEntries();
+      if($('#colourGalleryEnabled').checked && suppliedEntries.some(e=>e.url && !safeImage(e.url) && !e.file)) throw new Error('Invalid colour image URL.');
+      if(form.elements.is_published.checked) {
+        const preflight=api.validatePublication({...existing,...raw,printrove_variant_map:variantMap,currency:'INR',images:$('#colourGalleryEnabled').checked ? suppliedEntries.map(({file,...e})=>e) : existing?.images || [],mapping_verified_at:existing?.mapping_verified_at});
+        if(!preflight.valid) throw new Error(preflight.errors.join(' '));
       }
       const productId = raw.id || uuid();
+      form.elements.id.value = productId; // Retain the operation identity on an ambiguous failure.
       const productSlug = raw.slug.trim() || slugify(raw.name);
       const selectedFiles = [...form.elements.image_files.files];
-      const uploaded = await uploadGallery(selectedFiles, productId, productSlug, form);
+      const colourUpload = $('#colourGalleryEnabled').checked ? await uploadColourGallery(suppliedEntries,productId,form) : null;
+      const uploaded = colourUpload ? colourUpload.gallery : await uploadGallery(selectedFiles, productId, productSlug, form);
       const existingGallery = galleryOf(existing);
-      let gallery = uploaded.length ? uploaded : existingGallery;
+      let gallery = colourUpload ? uploaded : uploaded.length ? uploaded : existingGallery;
       const manualCover = raw.image_url.trim();
-      if (manualCover && !uploaded.length) gallery = [manualCover, ...gallery.filter((url) => url !== manualCover)];
-      const cover = gallery[0] || manualCover || existing?.image_url || '';
+      if (manualCover && !uploaded.length && !colourUpload) gallery = [manualCover, ...gallery.filter((url) => url !== manualCover)];
+      const cover = colourUpload ? gallery[0]?.url || '' : gallery[0] || manualCover || existing?.image_url || '';
       const selling = Number(raw.selling_price || 0);
       const base = Number(raw.base_cost || 0);
       const shipping = Number(raw.shipping_cost || 0);
@@ -397,8 +477,9 @@
         is_home_pinned: form.elements.is_home_pinned.checked
       };
       const { error } = await client.rpc('admin_save_product', { p_product: payload });
-      if (error) throw error;
-      const stale = existingGallery.filter(url => !gallery.includes(url)).map(assetPath).filter(Boolean);
+      if (error) throw new Error(`${error.message}${colourUpload?.uploadedPaths.length ? ` Uploaded objects retained for review: ${colourUpload.uploadedPaths.join(', ')}` : ''}`);
+      const retained=api.galleryUrls(payload);
+      const stale = existingGallery.filter(url => !retained.includes(url) && !products.some(p=>p.id!==productId && galleryOf(p).includes(url))).map(assetPath).filter(path=>path && path.startsWith(`public/${productId}/`) && !path.split('/').includes('..'));
       if (stale.length) { const cleanup = await client.storage.from('product-images').remove(stale); if (cleanup.error) console.warn('Old assets retained for later cleanup.'); }
       resetProduct();
       await loadAll();
@@ -1067,6 +1148,8 @@
       const importedProducts = Array.isArray(parsed) ? parsed : parsed.products;
       if (Array.isArray(importedProducts) && importedProducts.length) {
         for (const product of importedProducts) {
+          const validation=api.validateVariants(product.colours,product.sizes,product.printrove_variant_map || {});
+          if(validation.errors.length || api.normalizeGallery(product).invalid.length) throw new Error(`Invalid imported product: ${validation.errors.join(' ') || 'Invalid colour images.'}`);
           const { error } = await client.rpc('admin_save_product', { p_product: { ...product, id: /^[0-9a-f-]{36}$/i.test(product.id || '') ? product.id : uuid(), is_published: false, rating: 0, fulfilment_status: 'planned' } });
           if (error) throw error;
         }
@@ -1101,6 +1184,9 @@
 
     $('#productForm').addEventListener('submit', submitProduct);
     $('#productForm').elements.image_files.addEventListener('change', gallerySelection);
+    $('#colourGalleryEnabled').addEventListener('change',renderColourEditor);
+    $('#productForm').elements.colours.addEventListener('change',renderColourEditor);
+    $('#validateProduct').addEventListener('click',validateEditor);
     $('#productReset').addEventListener('click', resetProduct);
     ['price', 'selling_price', 'base_cost', 'supplier_shipping_cost'].forEach((name) => $('#productForm').elements[name].addEventListener('input', updateProfit));
     $('#productsTable').addEventListener('click', async (event) => {
@@ -1110,6 +1196,7 @@
       if (edit) editProduct(edit.dataset.editProduct);
       if (toggle) {
         const product = products.find((item) => item.id === toggle.dataset.toggleProduct);
+        if(!product.is_published) { const validation=api.validatePublication(product); if(!validation.valid) { alert(validation.errors.join(' ')); return; } }
         const { error } = await client.from('products').update({ is_published: !product.is_published }).eq('id', product.id);
         if (!error) await loadAll();
         else alert(error.message);

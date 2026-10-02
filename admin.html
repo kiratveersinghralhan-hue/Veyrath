@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#080808">
   <link rel="icon" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css?v=20260718-coupon-studio">
+  <link rel="stylesheet" href="styles.css?v=20261002-b3b1">
 </head>
 <body class="admin-body">
   <section class="admin-login" id="adminLogin">
@@ -91,7 +91,7 @@
                 <div class="field"><label>Store price &#8377;</label><input name="price" type="number" min="1" step="0.01" required></div>
                 <div class="field"><label>Selling price &#8377;</label><input name="selling_price" type="number" min="0" step="0.01" placeholder="Uses store price if zero"></div>
                 <div class="field"><label>Compare-at price &#8377;</label><input name="compare_at_price" type="number" min="0" step="0.01"></div>
-                <div class="field"><label>Category</label><select name="category"><option>T-Shirts</option><option>Hoodies</option><option>Lowers</option><option>Polos</option><option>Accessories</option></select></div>
+                <div class="field"><label>Category</label><input name="category" list="productCategories" value="T-Shirts"><datalist id="productCategories"><option value="T-Shirts"><option value="Hoodies"><option value="Lowers"><option value="Polos"><option value="Accessories"><option value="Men's Clothing - Oversized T-Shirt"></datalist></div>
                 <div class="field"><label>Gender</label><select name="gender"><option>Unisex</option><option>Men</option><option>Women</option></select></div>
                 <div class="field"><label>Sizes</label><input name="sizes" placeholder="S, M, L, XL"></div>
                 <div class="field"><label>Colours</label><input name="colours" placeholder="Ink Black, Oxblood"></div>
@@ -101,6 +101,7 @@
                 <div class="field field-full"><label>Description</label><textarea name="description"></textarea></div>
                 <div class="field"><label>Cover image URL</label><input name="image_url" placeholder="Optional https://&hellip; or local filename"></div>
                 <div class="field field-full product-gallery-upload"><label>Upload product gallery</label><input name="image_files" type="file" accept="image/jpeg,image/png,image/webp" multiple><span class="upload-note">Select front, back and colour mockups together. The first selected image becomes the cover. Selecting files replaces the existing gallery.</span><strong id="productGalleryStatus" class="gallery-upload-status">No new files selected.</strong></div>
+                <div class="field field-full"><label><input id="colourGalleryEnabled" type="checkbox"> Manage images by colour</label><span class="upload-note">Each colour has its own ordered images, shared by all sizes. Legacy flat galleries remain available.</span><div id="colourGalleryEditor"></div></div>
                 <div class="field"><label>Front design URL</label><input name="front_design_url"></div>
                 <div class="field"><label>Back design URL</label><input name="back_design_url"></div>
                 <div class="field field-full"><label>Tags / style</label><input name="tags" placeholder="dark luxury, astrology, oversized"></div>
@@ -109,11 +110,12 @@
                 <div class="field"><label>Default Printrove Variant ID</label><input name="printrove_variant_id" inputmode="numeric"></div>
                 <div class="field"><label>Printrove product type</label><input name="printrove_product_type" placeholder="Oversized T-Shirt"></div>
                 <div class="field"><label>Print type</label><input name="printrove_print_type" placeholder="DTG"></div>
-                <div class="field field-full"><label>Variant map JSON</label><textarea name="printrove_variant_map" class="variant-map" placeholder='{"Colour|Size":{"variant_id":"verified supplier variant ID"}}'></textarea><span class="upload-note">Use Colour|Size keys with {"variant_id":"…"} values. Ready attests that every mapping was verified.</span></div>
+                <div class="field field-full"><label>Variant map JSON</label><textarea name="printrove_variant_map" class="variant-map" placeholder='{"Colour|Size":{"variant_id":"verified supplier variant ID"}}'></textarea><span class="upload-note">Use exact Colour|Size keys. Validation does not verify provider designs or mark fulfilment ready.</span><button id="validateProduct" type="button">Validate mappings and media</button><output id="productValidation" aria-live="polite"></output></div>
                 <div class="field"><label>Base cost &#8377;</label><input name="base_cost" type="number" min="0" step="0.01"></div>
                 <div class="field"><label>Customer shipping charge &#8377;</label><input name="shipping_cost" type="number" min="0" step="0.01"></div><div class="field"><label>Private supplier shipping cost &#8377;</label><input name="supplier_shipping_cost" type="number" min="0" step="0.01"></div>
                 <div class="field"><label>Profit estimate &#8377;</label><input name="profit_estimate" type="text" value="&#8377;0" readonly></div>
                 <div class="field"><label>Fulfilment mapping</label><select name="fulfilment_status"><option value="planned">Planned</option><option value="mapped">Mapped</option><option value="ready">Ready</option><option value="paused">Paused</option></select></div>
+                <small class="field-full">Ready requires existing server-side provider verification. Changing supplier mappings clears that verification; browser validation cannot create it.</small>
 
               </div>
               <div class="checkbox-row"><label><input name="is_published" type="checkbox"> Published</label><label><input name="is_featured" type="checkbox"> Featured fallback</label><label><input name="is_home_pinned" type="checkbox"> Pin to homepage</label></div>
@@ -277,7 +279,7 @@
   <script src="site-data.js?v=20260925-phase1" defer></script>
   <script src="products.js?v=20260718-coupon-studio" defer></script>
   <script src="supabase-config.js?v=20260925-phase1" defer></script>
-  <script src="commerce-client.js?v=20260925-phase1" defer></script>
-  <script src="admin.js?v=20260925-phase1" defer></script>
+  <script src="commerce-client.js?v=20261002-b3b1" defer></script>
+  <script src="admin.js?v=20261002-b3b1" defer></script>
 </body>
 </html>

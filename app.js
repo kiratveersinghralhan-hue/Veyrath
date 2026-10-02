@@ -38,15 +38,9 @@
   const safeImage = window.VeyrathAPI.safeImage;
   const safeLink = window.VeyrathAPI.safeLink;
   const split = (value) => Array.isArray(value) ? value : String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-  const productImages = (product = {}) => [...new Set([
-    product.image_url,
-    ...(Array.isArray(product.images) ? product.images : []),
-    product.back_image_url,
-    product.front_image_url
-  ].map(safeImage).filter(Boolean))];
+  const productImages = (product = {}) => window.VeyrathAPI.galleryFor(product).map(e => e.url);
   const productPrice = (product = {}) => Number(product.sale_price || product.selling_price || product.price || 0);
   const slugText = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const MAX_MODAL_GALLERY_IMAGES = 8;
 
   let remoteProducts = null;
   let remoteSite = null;
@@ -344,10 +338,8 @@
   function openProduct(product) {
     if (!product) return;
     const modal = $('#productModal');
-    const allGallery = productImages(product);
-    const gallery = allGallery.slice(0, MAX_MODAL_GALLERY_IMAGES);
-    if (!gallery.length) gallery.push('veyrath-tee.jpg');
-    const galleryMarkup = gallery.map((image, index) => `<img src="${esc(image)}" alt="${esc(product.name)} gallery image ${index + 1}" ${index ? 'loading="lazy"' : ''}>`).join('');
+    let selection = window.VeyrathAPI.selectProduct(product);
+    let gallery = window.VeyrathAPI.galleryFor(product, selection.colour);
     const price = productPrice(product);
     const madeLabel = product.fulfilment_status === 'paused' ? 'Temporarily unavailable' : 'Made after order in India';
     const offer = offerForProduct(product.id);
@@ -355,8 +347,8 @@
     $('#productModalBody').innerHTML = `
       <div class="modal-grid">
         <div class="modal-gallery">
-          <div class="modal-images" data-modal-track>${galleryMarkup}</div>
-          ${gallery.length > 1 ? `<div class="modal-gallery-controls"><button type="button" data-gallery-prev aria-label="Previous product image">←</button><span><b data-gallery-current>1</b> / ${gallery.length}</span><button type="button" data-gallery-next aria-label="Next product image">→</button></div>` : ''}
+          <div class="modal-images" data-modal-track></div>
+          <div class="modal-gallery-controls"><button type="button" data-gallery-prev aria-label="Previous product image">←</button><span><b data-gallery-current>1</b> / <b data-gallery-total></b></span><button type="button" data-gallery-next aria-label="Next product image">→</button></div>
         </div>
         <div class="modal-copy">
           <p class="eyebrow">${esc(product.category || 'VEYRATH')}</p>
@@ -369,12 +361,14 @@
             <div><dt>Colours</dt><dd>${esc(split(product.colours).join(' / ') || 'As shown')}</dd></div>
             <div><dt>Made</dt><dd>${esc(madeLabel)}</dd></div>
           </dl>
+          <fieldset class="product-colour-options"><legend>Colour: <span data-selected-colour>${esc(selection.colour)}</span></legend>${split(product.colours).map(colour => `<button type="button" data-product-colour="${esc(colour)}" aria-pressed="${colour === selection.colour}">${esc(colour)}</button>`).join('')}</fieldset>
+          <label class="product-size-option">Size<select data-product-size>${split(product.sizes).map(size => `<option value="${esc(size)}" ${size === selection.size ? 'selected' : ''}>${esc(size)}</option>`).join('')}</select></label>
           ${collectionSwitcher(product)}
           <div class="modal-actions">
             <button class="btn btn-gold" type="button" data-buy-now="${esc(product.id)}" ${product.checkout_ready ? '' : 'disabled'}>${product.checkout_ready ? 'Buy securely' : 'Temporarily unavailable'}</button>
             <a class="btn btn-ghost" href="size-charts.html">Size guide</a>
           </div>
-          <small>${allGallery.length > MAX_MODAL_GALLERY_IMAGES ? `Showing the ${MAX_MODAL_GALLERY_IMAGES} key views for a faster, calmer gallery. ` : ''}Payment protected by Razorpay.</small>
+          <small>Payment protected by Razorpay.</small>
         </div>
       </div>`;
 
@@ -388,7 +382,23 @@
     const track = $('[data-modal-track]', modal);
     const counter = $('[data-gallery-current]', modal);
     let activeImage = 0;
+    const renderGallery = () => {
+      gallery = window.VeyrathAPI.galleryFor(product, selection.colour);
+      track.innerHTML = gallery.length ? gallery.map((image, index) => `<img src="${esc(image.url)}" alt="${esc(image.alt)}" ${index ? 'loading="lazy"' : ''}>`).join('') : '<p class="gallery-empty">Images are being prepared for this colour.</p>';
+      activeImage = 0; track.scrollLeft = 0; counter.textContent = '1';
+      $('[data-gallery-total]', modal).textContent = String(gallery.length);
+      $('.modal-gallery-controls', modal).hidden = gallery.length < 2;
+    };
+    renderGallery();
+    $$('[data-product-colour]', modal).forEach(button => button.addEventListener('click', () => {
+      selection = window.VeyrathAPI.selectProduct(product, { colour: button.dataset.productColour, size: $('[data-product-size]', modal).value });
+      $$('[data-product-colour]', modal).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.productColour === selection.colour)));
+      $('[data-selected-colour]', modal).textContent = selection.colour;
+      renderGallery();
+    }));
+    $('[data-product-size]', modal).addEventListener('change', event => { selection = window.VeyrathAPI.selectProduct(product, { ...selection, size: event.target.value }); });
     const moveGallery = (next) => {
+      if (!gallery.length) return;
       activeImage = (next + gallery.length) % gallery.length;
       track.scrollTo({
         left: activeImage * track.clientWidth,
